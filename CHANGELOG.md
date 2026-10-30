@@ -132,3 +132,12 @@ stock-photo library.
   track's energy.
 - All three sit in the Effects tab with their own intensity slider, and all three
   are deterministic — no random values, so preview and export agree.
+
+## 1.6.0 — 2026-10-30
+
+- **Type sits above the effect stack.** Titles, lyrics and the credit are drawn
+  after the effects now, so glitch, pixelate, kaleidoscope and kick zoom no
+  longer tear, mirror or scale the lettering. Effects still cover the picture.
+- **Drop shadow on type.** Text layers and lyrics use an offset, blurred shadow
+  (`0.045em` x, `0.075em` y) instead of a symmetric glow, so they hold up over
+  busy footage.

@@ -291,8 +291,10 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
   ctx.font = `700 ${cfg.size}px ${family}`;
-  ctx.shadowColor = 'rgba(0,0,0,0.65)';
-  ctx.shadowBlur = cfg.size * 0.35;
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = Math.max(9, cfg.size * 0.2);
+  ctx.shadowOffsetX = cfg.size * 0.04;
+  ctx.shadowOffsetY = cfg.size * 0.07;
   ctx.fillStyle = cfg.color;
 
   const progress = lineProgress(current, t, nextTime, 5);

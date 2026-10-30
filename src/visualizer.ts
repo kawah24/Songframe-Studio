@@ -124,6 +124,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
   }
   ctx.restore();
 
+  // Effects belong to the picture: run them before any type is drawn, so titles,
+  // lyrics and the credit never get pixelated, mirrored or zoomed.
+  applyEffects(ctx, width, height, k, config, frame);
+
   // --- text layers ---
   for (const layer of config.text) {
     if (!layer.text.trim()) continue;
@@ -131,8 +135,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
     ctx.save();
     ctx.globalAlpha = layer.opacity;
     ctx.fillStyle = layer.color;
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = Math.max(6, size * 0.22);
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = Math.max(9, size * 0.2);
+    ctx.shadowOffsetX = size * 0.045;
+    ctx.shadowOffsetY = size * 0.075;
     ctx.textAlign = layer.align;
     ctx.textBaseline = 'middle';
     ctx.font = `${layer.bold ? 700 : 500} ${size}px ${fontStack(layer.font)}`;
@@ -157,7 +163,6 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
     ctx.restore();
   }
 
-  applyEffects(ctx, width, height, k, config, frame);
 }
 
 function drawBackground(

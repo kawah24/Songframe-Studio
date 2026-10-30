@@ -79,7 +79,7 @@ Photos and clips keep their licence and author. The credit line is written into 
 
 **Lyrics** — load `.lrc` or `.srt` (SubRip cues, including their end times), or paste plain text and distribute it across the song. Pick the lyric font, then set size, position, colours and pill opacity; *Remove* unloads them, *Reset* restores the styling. Three styles: karaoke sweep, stacked lines, and scrolling. Position, size, visible line count, colours, pill opacity and a ±5 s timing offset.
 
-**FX** — shake, glitch, VHS, CCTV, scanlines, chromatic aberration, bloom, film grain, pixelate, strobe, vignette, hue shift, letterbox, kick zoom, kaleidoscope, light leak. Each with its own intensity.
+**FX** — shake, glitch, VHS, CCTV, scanlines, chromatic aberration, bloom, film grain, pixelate, strobe, vignette, hue shift, letterbox, kick zoom, kaleidoscope, light leak. Each with its own intensity. Text, lyrics and the credit are composited above the stack, so effects never touch the type.
 
 **Export** — H.264 + AAC in an MP4, encoded with WebCodecs and muxed by `mp4-muxer`, straight from the canvas at the chosen resolution. A **render range** (From / To in seconds, or “Start at the playhead”) cuts a section out of the song — the audio is trimmed to the same window, so a 1 s range produces a 1 s file. Progress with frame counts, cancel at any point, and a download link that stays available afterwards. `Save frame` writes a PNG; `Save look` writes a JSON preset you can load onto any other song.
 

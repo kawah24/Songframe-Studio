@@ -361,6 +361,52 @@ check(
 );
 check(newFx.zoomAmount, 'kick zoom intensity changes the punch');
 
+// type is composed above the effect stack, so effects must not move or scale it
+const typeUnderFx = await page.evaluate(() => {
+  const keys = ['shake', 'glitch', 'vhs', 'cctv', 'scanlines', 'chromatic', 'bloom', 'grain', 'pixelate', 'strobe', 'vignette', 'hue', 'letterbox', 'zoom', 'kaleidoscope', 'leak'];
+  const box = (withFx) => {
+    const effects = {};
+    for (const key of keys) effects[key] = false;
+    if (withFx) {
+      effects.kaleidoscope = true;
+      effects.zoom = true;
+      effects.pixelate = true;
+      effects.hue = true;
+    }
+    window.songframe.setConfig({
+      preset: 'Linear Bars',
+      bg: 'solid',
+      particles: 0,
+      effects,
+      amounts: { ...window.songframe.getState().amounts, kaleidoscope: 0.9, zoom: 1, pixelate: 1, hue: 1 },
+      text: [{ id: 'title', text: 'NEON TITLE', x: 50, y: 40, size: 72, color: '#ffffff', font: 'Segoe UI', bold: true, opacity: 1, align: 'center' }],
+      lyrics: { ...window.songframe.getState().lyrics, enabled: false },
+    });
+    window.songframe.drawAt(1.5);
+    const canvas = document.querySelector('#preview');
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let minX = 1e9;
+    let minY = 1e9;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const i = (y * canvas.width + x) * 4;
+        if (data[i] > 232 && data[i + 1] > 232 && data[i + 2] > 232) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    return [minX, minY, maxX, maxY];
+  };
+  return { off: box(false), on: box(true) };
+});
+const within = (a, b) => a.every((value, index) => Math.abs(value - b[index]) <= 2);
+check(within(typeUnderFx.off, typeUnderFx.on), 'text is not touched by the effect stack', JSON.stringify(typeUnderFx));
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');

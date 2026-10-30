@@ -5450,8 +5450,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.font = `700 ${cfg.size}px ${family}`;
-    ctx.shadowColor = "rgba(0,0,0,0.65)";
-    ctx.shadowBlur = cfg.size * 0.35;
+    ctx.shadowColor = "rgba(0,0,0,0.9)";
+    ctx.shadowBlur = Math.max(9, cfg.size * 0.2);
+    ctx.shadowOffsetX = cfg.size * 0.04;
+    ctx.shadowOffsetY = cfg.size * 0.07;
     ctx.fillStyle = cfg.color;
     const progress = lineProgress(current, t, nextTime, 5);
     if (cfg.style === "karaoke") {
@@ -5623,14 +5625,17 @@ If you want to offset all timestamps of a track such that the first one is zero,
       drawCenterArt(ctx, pulse, config, assets);
     }
     ctx.restore();
+    applyEffects(ctx, width, height, k, config, frame);
     for (const layer of config.text) {
       if (!layer.text.trim()) continue;
       const size = layer.id === "title" && config.preset === "Minimal" ? layer.size * pulse : layer.size;
       ctx.save();
       ctx.globalAlpha = layer.opacity;
       ctx.fillStyle = layer.color;
-      ctx.shadowColor = "rgba(0,0,0,0.55)";
-      ctx.shadowBlur = Math.max(6, size * 0.22);
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = Math.max(9, size * 0.2);
+      ctx.shadowOffsetX = size * 0.045;
+      ctx.shadowOffsetY = size * 0.075;
       ctx.textAlign = layer.align;
       ctx.textBaseline = "middle";
       ctx.font = `${layer.bold ? 700 : 500} ${size}px ${fontStack(layer.font)}`;
@@ -5652,7 +5657,6 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.fillText(config.credit, dw / 2 - 26, dh / 2 - 22);
       ctx.restore();
     }
-    applyEffects(ctx, width, height, k, config, frame);
   }
   function drawBackground(ctx, dw, dh, t, config, assets) {
     const dim = config.dim;
