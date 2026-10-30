@@ -1,7 +1,7 @@
 import { decodeSong, frameAt, Playback, type Song } from './audio';
 import defaultLogoUrl from './assets/logo.webp';
 import { initialsOf, loadImageFile, loadImageUrl, loadVideoFile, loadVideoUrl, makeCoverArt } from './backgrounds';
-import { hydrateSystemFonts } from './fonts';
+import { fontFamily, hydrateSystemFonts } from './fonts';
 import { exportFrame, exportVideo, frameSize, type ExportResult } from './export';
 import { parseLyrics } from './lyrics';
 import { creditLine, resolveFullSize, type MediaItem } from './media';
@@ -473,6 +473,12 @@ const textHandlers = {
     const layer = state.config.text.find((entry) => entry.id === id);
     if (!layer) return;
     Object.assign(layer, patch);
+    if (patch.align) {
+      // Alignment is relative to the frame: Left/Centre/Right put the box there.
+      const target = patch.align === 'left' ? 6 : patch.align === 'right' ? 94 : 50;
+      layer.x = clampTextX(layer, target);
+      syncActiveLayerControls();
+    }
     // Redraw only: rebuilding the panel (with hundreds of font options) on every
     // pointer event is what made the sliders feel like they moved in steps.
     state.version += 1;
@@ -1071,10 +1077,8 @@ function hitTest(point: { x: number; y: number }): { kind: DragState['kind']; id
     const x = ((layer.x - 50) / 100) * w;
     const y = ((layer.y - 50) / 100) * h;
     if (!ctx) continue;
-    const weight = layer.bold ? 700 : 500;
-    const font = `${weight} ${layer.size}px ${layer.font === 'Inter' ? 'Inter, "Segoe UI", system-ui, sans-serif' : layer.font}`;
     ctx.save();
-    ctx.font = font;
+    ctx.font = `${layer.bold ? 700 : 500} ${layer.size}px ${fontFamily(layer.font)}`;
     const width = ctx.measureText(layer.text).width;
     ctx.restore();
     const left = layer.align === 'left' ? x : layer.align === 'right' ? x - width : x - width / 2;
@@ -1095,6 +1099,40 @@ function hitTest(point: { x: number; y: number }): { kind: DragState['kind']; id
   return null;
 }
 
+/** Measured width of a layer in design pixels. */
+function textWidth(layer: TextLayer): number {
+  const ctx = document.querySelector<HTMLCanvasElement>('#preview')?.getContext('2d');
+  if (!ctx) return 0;
+  ctx.save();
+  ctx.font = `${layer.bold ? 700 : 500} ${layer.size}px ${fontFamily(layer.font)}`;
+  const width = ctx.measureText(layer.text).width;
+  ctx.restore();
+  return width;
+}
+
+/**
+ * Keeps a layer's box inside the frame. The anchor means different things per
+ * alignment, so the allowed range does too.
+ */
+function clampTextX(layer: TextLayer, percent: number): number {
+  const { w } = designSize();
+  const box = (textWidth(layer) / w) * 100;
+  let min = 1;
+  let max = 99;
+  if (layer.align === 'center') {
+    min = 1 + box / 2;
+    max = 99 - box / 2;
+  } else if (layer.align === 'left') {
+    min = 1;
+    max = 99 - box;
+  } else {
+    min = 1 + box;
+    max = 99;
+  }
+  if (min >= max) return 50;
+  return Math.max(min, Math.min(max, percent));
+}
+
 function applyDrag(point: { x: number; y: number }): void {
   const current = drag;
   if (!current) return;
@@ -1111,7 +1149,8 @@ function applyDrag(point: { x: number; y: number }): void {
   } else if (current.kind === 'text' && current.id) {
     const layer = state.config.text.find((entry) => entry.id === current.id);
     if (!layer) return;
-    layer.x = toPercentX((current.originX / 100 - 0.5) * w + dx);
+    const nextX = ((current.originX / 100 - 0.5) * w + dx) / w * 100 + 50;
+    layer.x = clampTextX(layer, Math.max(0, Math.min(100, nextX)));
     layer.y = toPercentY((current.originY / 100 - 0.5) * h + dy);
   }
   state.version += 1;

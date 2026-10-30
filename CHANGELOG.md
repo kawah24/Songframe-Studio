@@ -149,3 +149,14 @@ stock-photo library.
   (0.55em blur at full strength) on top of the drop shadow. Off by default, so
   existing looks render exactly as before. The karaoke sweep glows in the
   highlight colour, the rest in the lyric colour.
+
+## 1.7.1 — 2026-10-30
+
+- **Alignment is relative to the frame.** Clicking Left/Centre/Right now places
+  the text box at 6% / 50% / 94% of the frame instead of only changing the anchor
+  and leaving the layer wherever it was dragged.
+- **Dragging keeps the box inside the frame.** The anchor range is clamped by the
+  measured text width, so a long title can no longer be pulled past the edge and
+  clipped.
+- Hit-testing now measures with the same quoted font stack the renderer uses, so
+  clicking a layer in a font with spaces in its name lands on the glyphs.

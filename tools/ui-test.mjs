@@ -428,6 +428,75 @@ const glowProbe = await page.evaluate(() => {
 check(glowProbe.textOff !== glowProbe.textOn, 'text glow changes the frame');
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
+
+// alignment is relative to the frame, and dragging never pushes the box out
+await page.evaluate(() => {
+  window.songframe.setConfig({
+    preset: 'Minimal',
+    bg: 'solid',
+    particles: 0,
+    text: [{ id: 'title', text: 'Frame centre', x: 12, y: 30, size: 60, color: '#ffffff', font: 'Segoe UI', bold: true, opacity: 1, align: 'left', glow: 0 }],
+    lyrics: { ...window.songframe.getState().lyrics, enabled: false },
+  });
+  window.songframe.drawAt(1);
+});
+await page.click('.tab[data-tab="text"]');
+await page.waitForTimeout(250);
+if (await page.locator('.text-item .text-body').first().isHidden()) {
+  await page.locator('.text-item .text-head').first().click();
+  await page.waitForTimeout(200);
+}
+const clickAlign = async (label) => {
+  const buttons = page.locator('.text-item .text-body [data-align]');
+  const total = await buttons.count();
+  for (let i = 0; i < total; i += 1) {
+    const text = ((await buttons.nth(i).textContent()) || '').trim();
+    if (text === label) {
+      await buttons.nth(i).click();
+      await page.waitForTimeout(140);
+      return;
+    }
+  }
+};
+const textBox = () =>
+  page.evaluate(() => {
+    const canvas = document.querySelector('#preview');
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let minX = 1e9;
+    let maxX = -1;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const i = (y * canvas.width + x) * 4;
+        if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+        }
+      }
+    }
+    return { left: (minX / canvas.width) * 100, right: (maxX / canvas.width) * 100 };
+  });
+await page.evaluate(() => window.songframe.setConfig({ showCredit: false }));
+await clickAlign('Centre');
+const centreBox = await textBox();
+await clickAlign('Right');
+const rightBox = await textBox();
+await clickAlign('Left');
+const leftBox = await textBox();
+check(
+  Math.abs((centreBox.left + centreBox.right) / 2 - 50) < 2.5 && Math.abs(rightBox.right - 94) < 2.5 && Math.abs(leftBox.left - 6) < 2.5,
+  'alignment snaps the layer to the frame',
+  JSON.stringify({ left: leftBox.left.toFixed(1), centre: ((centreBox.left + centreBox.right) / 2).toFixed(1), right: rightBox.right.toFixed(1) }),
+);
+await clickAlign('Centre');
+const canvasBox = await page.locator('#preview').boundingBox();
+await page.mouse.move(canvasBox.x + canvasBox.width / 2, canvasBox.y + canvasBox.height * 0.3);
+await page.mouse.down();
+await page.mouse.move(canvasBox.x + canvasBox.width * 0.95, canvasBox.y + canvasBox.height * 0.3, { steps: 10 });
+await page.mouse.up();
+await page.waitForTimeout(200);
+const dragEdge = await textBox();
+check(dragEdge.right <= 99.5, 'dragging keeps the text box inside the frame', `${dragEdge.right.toFixed(1)}%`);
+await page.evaluate(() => window.songframe.setConfig({ text: [], lyrics: { ...window.songframe.getState().lyrics, enabled: false, glow: 0 } }));
 await page.evaluate(() => window.songframe.setConfig({ text: [], lyrics: { ...window.songframe.getState().lyrics, enabled: false, glow: 0 } }));
 
 // eject the song, then reset the whole session

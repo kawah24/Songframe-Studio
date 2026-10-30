@@ -8166,6 +8166,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const layer = state.config.text.find((entry) => entry.id === id);
       if (!layer) return;
       Object.assign(layer, patch);
+      if (patch.align) {
+        const target = patch.align === "left" ? 6 : patch.align === "right" ? 94 : 50;
+        layer.x = clampTextX(layer, target);
+        syncActiveLayerControls();
+      }
       state.version += 1;
     },
     remove: (id) => {
@@ -8691,10 +8696,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const x = (layer.x - 50) / 100 * w;
       const y = (layer.y - 50) / 100 * h;
       if (!ctx) continue;
-      const weight = layer.bold ? 700 : 500;
-      const font = `${weight} ${layer.size}px ${layer.font === "Inter" ? 'Inter, "Segoe UI", system-ui, sans-serif' : layer.font}`;
       ctx.save();
-      ctx.font = font;
+      ctx.font = `${layer.bold ? 700 : 500} ${layer.size}px ${fontFamily(layer.font)}`;
       const width = ctx.measureText(layer.text).width;
       ctx.restore();
       const left = layer.align === "left" ? x : layer.align === "right" ? x - width : x - width / 2;
@@ -8712,6 +8715,33 @@ If you want to offset all timestamps of a track such that the first one is zero,
     if (distance < 260 * config.scale) return { kind: "visualizer" };
     return null;
   }
+  function textWidth(layer) {
+    const ctx = document.querySelector("#preview")?.getContext("2d");
+    if (!ctx) return 0;
+    ctx.save();
+    ctx.font = `${layer.bold ? 700 : 500} ${layer.size}px ${fontFamily(layer.font)}`;
+    const width = ctx.measureText(layer.text).width;
+    ctx.restore();
+    return width;
+  }
+  function clampTextX(layer, percent) {
+    const { w } = designSize();
+    const box2 = textWidth(layer) / w * 100;
+    let min = 1;
+    let max = 99;
+    if (layer.align === "center") {
+      min = 1 + box2 / 2;
+      max = 99 - box2 / 2;
+    } else if (layer.align === "left") {
+      min = 1;
+      max = 99 - box2;
+    } else {
+      min = 1 + box2;
+      max = 99;
+    }
+    if (min >= max) return 50;
+    return Math.max(min, Math.min(max, percent));
+  }
   function applyDrag(point) {
     const current = drag;
     if (!current) return;
@@ -8727,7 +8757,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     } else if (current.kind === "text" && current.id) {
       const layer = state.config.text.find((entry) => entry.id === current.id);
       if (!layer) return;
-      layer.x = toPercentX((current.originX / 100 - 0.5) * w + dx);
+      const nextX = ((current.originX / 100 - 0.5) * w + dx) / w * 100 + 50;
+      layer.x = clampTextX(layer, Math.max(0, Math.min(100, nextX)));
       layer.y = toPercentY((current.originY / 100 - 0.5) * h + dy);
     }
     state.version += 1;
