@@ -176,3 +176,15 @@ stock-photo library.
   image now rattle with the beat (up to 34px and a small tilt), and a pixel diff
   confirms nothing outside the disc changes. The continuous `bass^1.6` response
   from 1.7.2 stays, so the slider is audible at low bass too.
+
+## 1.7.4 — 2026-10-30
+
+- **Lyrics glow is actually visible now.** A single `shadowBlur` of ~0.55× the
+  font size is wider than a letter stem, so the light spread out to a peak of
+  only 29/255 — and the black drop shadow was then painted on top of it. The
+  glow is now four stacked narrow layers, and the drop shadow eases back as the
+  glow comes up. Peak halo brightness roughly triples; a pixel count in the
+  lyric band goes from 2 057 to 4 492 lit pixels.
+- Note the glow follows the **Text** colour. In Karaoke style the swept part of
+  the line is painted with **Highlight**, so a pink line with a white glow is the
+  expected combination, not a colour bug.

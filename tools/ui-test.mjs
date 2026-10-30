@@ -473,6 +473,49 @@ const shakeRange = await page.evaluate(() => {
 });
 check(shakeRange.centre > 200, 'shake intensity moves the centre art', JSON.stringify(shakeRange));
 check(shakeRange.corner === 0, 'shake leaves the background alone', JSON.stringify(shakeRange));
+
+// a glow has to be bright enough to actually read as light
+const glowBrightness = await page.evaluate(() => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const band = () => {
+    const y0 = Math.floor(canvas.height * 0.62);
+    const data = ctx.getImageData(0, y0, canvas.width, canvas.height - y0).data;
+    let lit = 0;
+    let peak = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      if (v > 40) lit += 1;
+      if (v > peak) peak = v;
+    }
+    return { lit, peak: Math.round(peak) };
+  };
+  const shot = (glow) => {
+    window.songframe.setConfig({
+      preset: 'Minimal',
+      bg: 'solid',
+      particles: 0,
+      text: [],
+      lyrics: {
+        ...window.songframe.getState().lyrics,
+        enabled: true,
+        style: 'lines',
+        color: '#ffffff',
+        highlight: '#ec4899',
+        pillOpacity: 0,
+        glow,
+      },
+    });
+    window.songframe.drawAt(1.2);
+    return band();
+  };
+  return { off: shot(0), on: shot(1) };
+});
+check(
+  glowBrightness.on.lit > glowBrightness.off.lit * 2 && glowBrightness.on.peak > 150,
+  'lyric glow is bright enough to see',
+  JSON.stringify(glowBrightness),
+);
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 

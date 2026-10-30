@@ -5455,11 +5455,40 @@ If you want to offset all timestamps of a track such that the first one is zero,
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.font = `700 ${cfg.size}px ${family}`;
-    ctx.shadowColor = "rgba(0,0,0,0.9)";
-    ctx.shadowBlur = Math.max(9, cfg.size * 0.2);
+    const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+    ctx.shadowColor = `rgba(0,0,0,${(0.9 - 0.5 * glow).toFixed(3)})`;
+    ctx.shadowBlur = Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow);
     ctx.shadowOffsetX = cfg.size * 0.04;
     ctx.shadowOffsetY = cfg.size * 0.07;
     ctx.fillStyle = cfg.color;
+    const glowLayers = [
+      { blur: 0.05, alpha: 0.9 },
+      { blur: 0.11, alpha: 0.7 },
+      { blur: 0.23, alpha: 0.5 },
+      { blur: 0.42, alpha: 0.3 }
+    ];
+    const paintGlow = (size, paint) => {
+      if (glow <= 0) return;
+      const keepBlur = ctx.shadowBlur;
+      const keepColor = ctx.shadowColor;
+      const keepX = ctx.shadowOffsetX;
+      const keepY = ctx.shadowOffsetY;
+      const keepAlpha = ctx.globalAlpha;
+      ctx.fillStyle = cfg.color;
+      ctx.shadowColor = cfg.color;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      for (const layer of glowLayers) {
+        ctx.shadowBlur = size * layer.blur * glow;
+        ctx.globalAlpha = layer.alpha * glow;
+        paint();
+      }
+      ctx.globalAlpha = keepAlpha;
+      ctx.shadowBlur = keepBlur;
+      ctx.shadowColor = keepColor;
+      ctx.shadowOffsetX = keepX;
+      ctx.shadowOffsetY = keepY;
+    };
     const progress = lineProgress(current, t, nextTime, 5);
     if (cfg.style === "karaoke") {
       const text = current.text;
@@ -5477,27 +5506,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.beginPath();
       ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, Math.min(pillHeight, size * 1.5) / 2);
       ctx.fill();
-      const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
-      if (glow > 0) {
-        const keepBlur = ctx.shadowBlur;
-        const keepColor = ctx.shadowColor;
-        const keepX = ctx.shadowOffsetX;
-        const keepY = ctx.shadowOffsetY;
-        ctx.fillStyle = cfg.color;
-        ctx.shadowColor = cfg.color;
-        ctx.shadowBlur = size * 0.55 * glow;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-        ctx.globalAlpha = 0.75;
+      paintGlow(size, () => {
         rows.forEach((row, index2) => {
           ctx.fillText(row.text, 0, top + index2 * lineHeight);
         });
-        ctx.globalAlpha = 1;
-        ctx.shadowBlur = keepBlur;
-        ctx.shadowColor = keepColor;
-        ctx.shadowOffsetX = keepX;
-        ctx.shadowOffsetY = keepY;
-      }
+      });
       const total = Math.max(1, text.length);
       rows.forEach((row, i) => {
         const rowY = top + i * lineHeight;
@@ -5542,25 +5555,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
           ctx.fill();
           ctx.restore();
         }
-        const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
-        if (glow > 0 && entry.active) {
-          const keepBlur = ctx.shadowBlur;
-          const keepColor = ctx.shadowColor;
-          const keepX = ctx.shadowOffsetX;
-          const keepY = ctx.shadowOffsetY;
-          ctx.globalAlpha = 0.75;
-          ctx.fillStyle = cfg.color;
-          ctx.shadowColor = cfg.color;
-          ctx.shadowBlur = entry.size * 0.55 * glow;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
-          entry.rows.forEach((row, i) => {
-            ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
+        if (entry.active) {
+          paintGlow(entry.size, () => {
+            entry.rows.forEach((row, i) => {
+              ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
+            });
           });
-          ctx.shadowBlur = keepBlur;
-          ctx.shadowColor = keepColor;
-          ctx.shadowOffsetX = keepX;
-          ctx.shadowOffsetY = keepY;
         }
         ctx.globalAlpha = alpha;
         entry.rows.forEach((row, i) => {
@@ -5578,25 +5578,9 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.fillStyle = pill;
       ctx.fillRect(-width / 2, y - cfg.size * 0.85, width, cfg.size * 1.7);
       ctx.textAlign = "left";
-      const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
-      if (glow > 0) {
-        const keepBlur = ctx.shadowBlur;
-        const keepColor = ctx.shadowColor;
-        const keepX = ctx.shadowOffsetX;
-        const keepY = ctx.shadowOffsetY;
-        ctx.fillStyle = cfg.color;
-        ctx.shadowColor = cfg.color;
-        ctx.shadowBlur = cfg.size * 0.55 * glow;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-        ctx.globalAlpha = 0.75;
+      paintGlow(cfg.size, () => {
         ctx.fillText(current.text, x, y);
-        ctx.globalAlpha = 1;
-        ctx.shadowBlur = keepBlur;
-        ctx.shadowColor = keepColor;
-        ctx.shadowOffsetX = keepX;
-        ctx.shadowOffsetY = keepY;
-      }
+      });
       ctx.fillStyle = cfg.color;
       ctx.fillText(current.text, x, y);
     }
