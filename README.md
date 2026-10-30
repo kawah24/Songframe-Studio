@@ -59,6 +59,7 @@ Double-click that file. It is one self-contained HTML document (about 235 KB) wi
 | Waveform | the whole track's waveform, played part bright, with a playhead |
 | Vinyl | spinning record with the cover as its label and a progress ring |
 | Lyrics | type-only layout for lyric videos, with a bass-reactive glow |
+| Halo | rainbow spectrum ring in perspective, with a sunburst floor |
 
 The centre image starts as the studio logo (embedded in the build), with *Default logo* and *Generated art* to switch, and *Choose image* / *Library* for your own.
 
@@ -76,7 +77,7 @@ Photos and clips keep their licence and author. The credit line is written into 
 
 **Text** — any number of layers with font, size, colour, weight, alignment and opacity. The font menu lists the families actually installed on the machine (about 50 on a default Windows box), not a fixed six, dragged straight on the canvas and resized with the wheel.
 
-**Lyrics** — load `.lrc` (including `<mm:ss.xx>` word timings, `[offset:]`, section tags) or paste plain text and distribute it across the song. Three styles: karaoke sweep, stacked lines, and scrolling. Position, size, visible line count, colours, pill opacity and a ±5 s timing offset.
+**Lyrics** — load `.lrc` or `.srt` (SubRip cues, including their end times), or paste plain text and distribute it across the song. Three styles: karaoke sweep, stacked lines, and scrolling. Position, size, visible line count, colours, pill opacity and a ±5 s timing offset.
 
 **FX** — shake, glitch, VHS, CCTV, scanlines, chromatic aberration, bloom, film grain, pixelate, strobe, vignette, hue shift, letterbox. Each with its own intensity.
 

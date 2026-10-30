@@ -3,7 +3,7 @@ import defaultLogoUrl from './assets/logo.webp';
 import { initialsOf, loadImageFile, loadImageUrl, loadVideoFile, loadVideoUrl, makeCoverArt } from './backgrounds';
 import { hydrateSystemFonts } from './fonts';
 import { exportFrame, exportVideo, frameSize, type ExportResult } from './export';
-import { distributePlainText, parseLrc } from './lyrics';
+import { parseLyrics } from './lyrics';
 import { creditLine, resolveFullSize, type MediaItem } from './media';
 import { createMediaPicker, PATTERN_NAMES } from './media-ui';
 import { applyTheme, currentThemeId, THEMES } from './theme';
@@ -819,8 +819,7 @@ async function loadCoverImage(file: File): Promise<void> {
 
 function applyLyricText(text: string): void {
   const duration = state.song?.duration ?? 0;
-  const parsed = parseLrc(text);
-  const lines = parsed.length > 0 ? parsed : distributePlainText(text, duration);
+  const lines = parseLyrics(text, duration);
   if (lines.length === 0) {
     ui.toast('No lyric lines found in that text.', 'err');
     return;
@@ -1008,7 +1007,7 @@ function rebuildFx(): void {
 
 function randomizeLook(): void {
   const palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
-  const presets: PresetId[] = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Digital Rain', 'Shockwave', 'Waveform', 'Vinyl', 'Lyrics'];
+  const presets: PresetId[] = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Digital Rain', 'Shockwave', 'Waveform', 'Vinyl', 'Lyrics', 'Halo'];
   commit(() => {
     state.config.primary = palette.primary;
     state.config.secondary = palette.secondary;
@@ -1363,7 +1362,7 @@ function bindEvents(): void {
 
   ui.$('#btnAddText').addEventListener('click', addTextLayer);
   ui.$('#btnRandomPreset').addEventListener('click', () => {
-    const ids = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics'];
+    const ids = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics', 'Halo'];
     const next = ids[Math.floor(Math.random() * ids.length)] as PresetId;
     commit(() => { state.config.preset = next; });
   });

@@ -11,7 +11,8 @@ export type PresetId =
   | 'Minimal'
   | 'Waveform'
   | 'Vinyl'
-  | 'Lyrics';
+  | 'Lyrics'
+  | 'Halo';
 
 export type Aspect = '16:9' | '9:16' | '1:1';
 export type BgKind = 'generated' | 'pattern' | 'image' | 'video' | 'none';
@@ -119,6 +120,8 @@ export interface Frame {
 
 export interface LyricLine {
   time: number;
+  /** End of the cue when the file carries one (SRT). */
+  end?: number;
   text: string;
   isSection: boolean;
   /** Word timings for karaoke sweeps, absolute seconds. */

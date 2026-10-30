@@ -39,6 +39,7 @@ const ICONS: Record<string, string> = {
   Waveform: '<path d="M3 12v-2M6.5 12V7M10 12V4M13.5 12V9M17 12V6M20.5 12v-3"/>',
   Vinyl: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5"/>',
   Lyrics: '<path d="M4 7h9M4 12h16M4 17h11"/><path d="M18 6v4"/>',
+  Halo: '<ellipse cx="12" cy="14" rx="9" ry="3.6"/><path d="M12 10.4V4M7 11.6V7M17 11.6V7M4.2 13v-2M19.8 13v-2"/>',
 };
 
 function svg(paths: string, size = 24): string {

@@ -165,7 +165,7 @@ check(Math.abs((await state()).sensitivity - 1.7) < 0.02, 'sensitivity updates t
 check(hot !== barsFew, 'sensitivity changes the frame');
 
 // opacity must reach every preset, not just the ones that leave alpha alone
-const everyPreset = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics'];
+const everyPreset = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics', 'Halo'];
 const deaf = [];
 for (const name of everyPreset) {
   const differs = await page.evaluate((preset) => {

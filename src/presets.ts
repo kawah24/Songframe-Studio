@@ -27,6 +27,7 @@ export const PRESETS: { id: PresetId; label: string; hint: string }[] = [
   { id: 'Waveform', label: 'Waveform', hint: 'Whole-track waveform with a playhead' },
   { id: 'Vinyl', label: 'Vinyl', hint: 'Spinning record with a progress ring' },
   { id: 'Lyrics', label: 'Lyrics', hint: 'Type-only layout for lyric videos' },
+  { id: 'Halo', label: 'Halo', hint: 'Rainbow spectrum ring in perspective' },
 ];
 
 export const EFFECTS: { key: EffectKey; label: string; hint: string }[] = [

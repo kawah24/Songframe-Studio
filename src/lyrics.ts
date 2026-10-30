@@ -91,6 +91,49 @@ export function parseLrc(text: string): LyricLine[] {
   return lines;
 }
 
+const SRT_CUE = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
+
+function cueSeconds(hours: string, minutes: string, seconds: string, fraction: string): number {
+  const scale = fraction.length === 1 ? 0.1 : fraction.length === 2 ? 0.01 : 0.001;
+  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds) + Number(fraction) * scale;
+}
+
+/**
+ * SubRip: numbered cues with explicit start and end times. Multiline cues are
+ * joined and styling tags stripped.
+ */
+export function parseSrt(text: string): LyricLine[] {
+  const blocks = text.replace(/\r\n/g, '\n').split(/\n{2,}/);
+  const lines: LyricLine[] = [];
+  for (const block of blocks) {
+    const rows = block.split('\n').map((row) => row.trim()).filter(Boolean);
+    if (rows.length < 2) continue;
+    const cueIndex = rows.findIndex((row) => row.includes('-->'));
+    if (cueIndex < 0) continue;
+    const match = SRT_CUE.exec(rows[cueIndex]);
+    if (!match) continue;
+    const start = cueSeconds(match[1], match[2], match[3], match[4]);
+    const end = cueSeconds(match[5], match[6], match[7], match[8]);
+    const body = rows
+      .slice(cueIndex + 1)
+      .join(' ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\{\\[^}]*\}/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!body) continue;
+    lines.push({ time: start, end, text: body, isSection: false, words: [], weight: Math.max(1, body.length) });
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+/** LRC, SRT or plain text — whichever the file turns out to be. */
+export function parseLyrics(text: string, duration: number): LyricLine[] {
+  if (SRT_CUE.test(text)) return parseSrt(text);
+  if (/\[\d{1,3}:\d{2}/.test(text)) return parseLrc(text);
+  return distributePlainText(text, duration);
+}
+
 /** Spreads pasted, untimed lyrics evenly across the song. */
 export function distributePlainText(text: string, duration: number): LyricLine[] {
   const raw = text
@@ -178,7 +221,12 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   }
 
   const current = lines[index];
-  const nextTime = index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
+  const nextTime =
+    current.end && current.end > current.time
+      ? current.end
+      : index + 1 < lines.length
+        ? lines[index + 1].time
+        : current.time + 6;
   const fontSize = cfg.size;
   const y = cfg.pos === 'bottom' ? height * 0.5 - height * 0.115 : cfg.pos === 'top' ? -height * 0.5 + height * 0.115 : 0;
   const pill = rgba(cfg.pill, cfg.pillOpacity);

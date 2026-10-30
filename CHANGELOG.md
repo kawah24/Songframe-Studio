@@ -63,3 +63,13 @@ stock-photo library.
 - Background video is re-seeked per exported frame, which is correct but slower
   than a still image.
 - The executable is unsigned; Windows SmartScreen warns on first launch.
+
+## 1.1.0 — 2026-10-30
+
+- **Halo** preset: a rainbow spectrum ring drawn in perspective — bars rising
+  from a foreshortened ellipse, with a sunburst floor and a dark well in the
+  middle. Responds to bar count, sensitivity and opacity like the others.
+- **SubRip (.srt) lyrics.** Cue start *and* end times are used, so karaoke
+  progress follows the actual cue length instead of the gap to the next line.
+  LRC, SRT and plain text are detected automatically; multi-line cues are joined
+  and styling tags stripped.

@@ -187,10 +187,10 @@
                 </button>
                 <div class="accordion-body" id="lyricsBody" hidden>
                   <div class="lyric-actions">
-                    <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc</button>
+                    <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc / .srt</button>
                     <span class="muted" id="lyricStatus">No lyrics loaded</span>
                   </div>
-                  <textarea id="lyricText" rows="5" placeholder="Paste lyrics here and press Distribute to spread them across the song."></textarea>
+                  <textarea id="lyricText" rows="5" placeholder="Paste lyrics, LRC or SRT here — synced files keep their timing, plain text gets distributed across the song."></textarea>
                   <button class="btn ghost small" id="btnDistribute" type="button">Distribute evenly</button>
 
                   <div class="seg" id="lyricStyleSeg"></div>
@@ -310,7 +310,7 @@
     <input type="file" id="fileImage" accept="image/*" hidden />
     <input type="file" id="fileVideo" accept="video/*" hidden />
     <input type="file" id="fileCover" accept="image/*" hidden />
-    <input type="file" id="fileLyrics" accept=".lrc,.txt,text/plain" hidden />
+    <input type="file" id="fileLyrics" accept=".lrc,.srt,.vtt,.txt,text/plain,application/x-subrip" hidden />
     <input type="file" id="fileLook" accept=".json,application/json" hidden />
 
     <!--APP-->

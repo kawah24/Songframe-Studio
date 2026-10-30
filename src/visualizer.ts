@@ -111,6 +111,9 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
     case 'Lyrics':
       drawLyricsPreset(ctx, frame, config, dw, dh);
       break;
+    case 'Halo':
+      drawHalo(ctx, frame, config, dw, dh);
+      break;
   }
 
   // The lyrics layout is type-only: particles read as stray dots around the words.
@@ -639,6 +642,114 @@ function drawLyricsPreset(ctx: CanvasRenderingContext2D, frame: Frame, config: C
   ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
 }
 
+function drawHalo(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  config: Config,
+  dw: number,
+  dh: number,
+): void {
+  const base = ctx.globalAlpha;
+  const size = Math.min(dw, dh);
+  const radius = size * 0.36;
+  const squash = 0.42;
+  const count = Math.max(48, Math.min(240, Math.round(config.bars * 2)));
+  const barMax = size * 0.32;
+  const hueAt = (fraction: number): number => (fraction * 360 + 190) % 360;
+
+  // The disc the ring stands on: a soft sheen inside, sunburst outside.
+  ctx.save();
+  ctx.scale(1, squash);
+  const floor = ctx.createRadialGradient(0, 0, radius * 0.12, 0, 0, radius * 1.02);
+  floor.addColorStop(0, 'rgba(0,0,0,0)');
+  floor.addColorStop(0.72, 'rgba(0,0,0,0)');
+  floor.addColorStop(1, 'rgba(255,255,255,0.05)');
+  ctx.fillStyle = floor;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 1.02, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Sunburst: dense radial lines, brighter outside the ring.
+  const rays = 260;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < rays; i++) {
+    const angle = (i / rays) * Math.PI * 2;
+    const hue = hueAt(i / rays);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const innerStart = radius * 0.42;
+    const innerEnd = radius * 0.99;
+    ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 55%, 70%, ${(base * 0.06).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(cos * innerStart, sin * innerStart * squash);
+    ctx.lineTo(cos * innerEnd, sin * innerEnd * squash);
+    ctx.stroke();
+
+    const outerEnd = radius * (1.44 + 0.3 * Math.sin(i * 1.7));
+    ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 24%, 90%, ${(base * 0.27).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * squash);
+    ctx.lineTo(cos * outerEnd, sin * outerEnd * squash);
+    ctx.stroke();
+  }
+
+  // The dark well in the middle.
+  ctx.save();
+  ctx.scale(1, squash);
+  const well = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.44);
+  well.addColorStop(0, 'rgba(0,0,0,1)');
+  well.addColorStop(0.66, 'rgba(0,0,0,1)');
+  well.addColorStop(0.86, 'rgba(0,0,0,0.72)');
+  well.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = well;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.44, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Bars rise straight up, painted back to front so the front arc overlaps.
+  const order: { index: number; depth: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    order.push({ index: i, depth: Math.sin(angle) });
+  }
+  order.sort((a, b) => a.depth - b.depth);
+
+  for (const entry of order) {
+    const angle = (entry.index / count) * Math.PI * 2;
+    const value = bandAt(frame.bands, entry.index, count);
+    const height = 5 + Math.pow(value, 1.12) * barMax;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius * squash;
+    const hue = hueAt(entry.index / count).toFixed(0);
+    // The far side sits slightly darker, which is what sells the tilt.
+    const depth = 0.62 + 0.38 * ((entry.depth + 1) / 2);
+
+    ctx.strokeStyle = `hsl(${hue}, 96%, 60%)`;
+    ctx.globalAlpha = base * depth * 0.3;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y - height);
+    ctx.stroke();
+
+    ctx.globalAlpha = base * depth;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y - height);
+    ctx.stroke();
+
+    ctx.globalAlpha = base * depth;
+    ctx.fillStyle = `hsl(${hue}, 100%, 84%)`;
+    ctx.fillRect(x - 1, y - height - 3, 2, 3);
+  }
+
+  ctx.globalAlpha = base;
+  ctx.lineWidth = 1;
+}
 function drawParticles(ctx: CanvasRenderingContext2D, frame: Frame, config: Config, dw: number, dh: number): void {
   const base = ctx.globalAlpha;
   const count = config.particles;

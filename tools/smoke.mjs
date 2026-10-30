@@ -132,7 +132,7 @@ check(renderEnabled, 'render button enables');
 
 // --- every preset, every aspect ----------------------------------------
 const presets = await page.evaluate(() => window.songframe.getState().preset);
-const allPresets = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics'];
+const allPresets = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics', 'Halo'];
 let presetFailures = 0;
 for (const preset of allPresets) {
   const result = await page.evaluate((name) => {
