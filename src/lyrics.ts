@@ -1,5 +1,6 @@
 import type { LyricsConfig, LyricLine } from './types';
 import { rgba } from './backgrounds';
+import { fontFamily } from './fonts';
 
 const TIME_TAG = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
 const WORD_TAG = /<(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?>/g;
@@ -234,7 +235,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   ctx.save();
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
-  ctx.font = `700 ${fontSize}px "Segoe UI", Inter, system-ui, sans-serif`;
+  ctx.font = `700 ${fontSize}px ${fontFamily(cfg.font)}`;
   ctx.shadowColor = 'rgba(0,0,0,0.65)';
   ctx.shadowBlur = fontSize * 0.35;
   ctx.fillStyle = cfg.color;

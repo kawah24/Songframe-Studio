@@ -54,6 +54,7 @@ export interface TextLayer {
 
 export interface LyricsConfig {
   enabled: boolean;
+  font: FontId;
   style: LyricsStyle;
   pos: LyricsPos;
   size: number;

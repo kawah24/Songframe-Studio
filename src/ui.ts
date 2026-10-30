@@ -331,6 +331,11 @@ function fontOptions(current: string): string {
   return groups.join('');
 }
 
+/** Fills any font menu (text layers and lyrics) with the system list. */
+export function buildFontSelect(select: HTMLSelectElement, current: string): void {
+  select.innerHTML = fontOptions(current);
+}
+
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
 }

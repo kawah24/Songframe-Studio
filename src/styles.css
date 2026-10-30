@@ -854,6 +854,10 @@ select {
   gap: 10px;
 }
 
+.lyric-actions #btnLyricsClear {
+  margin-left: auto;
+}
+
 /* ---------- fx ---------- */
 
 .fx-list {

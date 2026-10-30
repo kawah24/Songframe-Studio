@@ -2189,10 +2189,10 @@ body.is-modal {
                 </button>
                 <div class="accordion-body" id="lyricsBody" hidden>
                   <div class="lyric-actions">
-                    <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc</button>
+                    <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc / .srt</button>
                     <span class="muted" id="lyricStatus">No lyrics loaded</span>
                   </div>
-                  <textarea id="lyricText" rows="5" placeholder="Paste lyrics here and press Distribute to spread them across the song."></textarea>
+                  <textarea id="lyricText" rows="5" placeholder="Paste lyrics, LRC or SRT here — synced files keep their timing, plain text gets distributed across the song."></textarea>
                   <button class="btn ghost small" id="btnDistribute" type="button">Distribute evenly</button>
 
                   <div class="seg" id="lyricStyleSeg"></div>
@@ -2312,7 +2312,7 @@ body.is-modal {
     <input type="file" id="fileImage" accept="image/*" hidden />
     <input type="file" id="fileVideo" accept="video/*" hidden />
     <input type="file" id="fileCover" accept="image/*" hidden />
-    <input type="file" id="fileLyrics" accept=".lrc,.txt,text/plain" hidden />
+    <input type="file" id="fileLyrics" accept=".lrc,.srt,.vtt,.txt,text/plain,application/x-subrip" hidden />
     <input type="file" id="fileLook" accept=".json,application/json" hidden />
 
     <script>
@@ -2652,7 +2652,8 @@ body.is-modal {
     { id: "Minimal", label: "Clean", hint: "Type, backdrop, nothing else" },
     { id: "Waveform", label: "Waveform", hint: "Whole-track waveform with a playhead" },
     { id: "Vinyl", label: "Vinyl", hint: "Spinning record with a progress ring" },
-    { id: "Lyrics", label: "Lyrics", hint: "Type-only layout for lyric videos" }
+    { id: "Lyrics", label: "Lyrics", hint: "Type-only layout for lyric videos" },
+    { id: "Halo", label: "Halo", hint: "Rainbow spectrum ring in perspective" }
   ];
   var EFFECTS = [
     { key: "shake", label: "Shake", hint: "Camera jolt on bass hits" },
@@ -5272,6 +5273,34 @@ If you want to offset all timestamps of a track such that the first one is zero,
     lines.sort((a, b) => a.time - b.time);
     return lines;
   }
+  var SRT_CUE = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
+  function cueSeconds(hours, minutes, seconds2, fraction) {
+    const scale = fraction.length === 1 ? 0.1 : fraction.length === 2 ? 0.01 : 1e-3;
+    return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds2) + Number(fraction) * scale;
+  }
+  function parseSrt(text) {
+    const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
+    const lines = [];
+    for (const block of blocks) {
+      const rows = block.split("\n").map((row) => row.trim()).filter(Boolean);
+      if (rows.length < 2) continue;
+      const cueIndex = rows.findIndex((row) => row.includes("-->"));
+      if (cueIndex < 0) continue;
+      const match = SRT_CUE.exec(rows[cueIndex]);
+      if (!match) continue;
+      const start = cueSeconds(match[1], match[2], match[3], match[4]);
+      const end = cueSeconds(match[5], match[6], match[7], match[8]);
+      const body = rows.slice(cueIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").replace(/\s+/g, " ").trim();
+      if (!body) continue;
+      lines.push({ time: start, end, text: body, isSection: false, words: [], weight: Math.max(1, body.length) });
+    }
+    return lines.sort((a, b) => a.time - b.time);
+  }
+  function parseLyrics(text, duration) {
+    if (SRT_CUE.test(text)) return parseSrt(text);
+    if (/\[\d{1,3}:\d{2}/.test(text)) return parseLrc(text);
+    return distributePlainText(text, duration);
+  }
   function distributePlainText(text, duration) {
     const raw = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
     if (raw.length === 0) return [];
@@ -5337,7 +5366,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       index = probe;
     }
     const current = lines[index];
-    const nextTime = index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
+    const nextTime = current.end && current.end > current.time ? current.end : index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
     const fontSize = cfg.size;
     const y = cfg.pos === "bottom" ? height * 0.5 - height * 0.115 : cfg.pos === "top" ? -height * 0.5 + height * 0.115 : 0;
     const pill = rgba(cfg.pill, cfg.pillOpacity);
@@ -5491,6 +5520,9 @@ If you want to offset all timestamps of a track such that the first one is zero,
         break;
       case "Lyrics":
         drawLyricsPreset(ctx, frame, config, dw, dh);
+        break;
+      case "Halo":
+        drawHalo(ctx, frame, config, dw, dh);
         break;
     }
     if (config.preset !== "Lyrics") drawParticles(ctx, frame, config, dw, dh);
@@ -5951,6 +5983,92 @@ If you want to offset all timestamps of a track such that the first one is zero,
     glow.addColorStop(1, rgba("#000000", 0));
     ctx.fillStyle = glow;
     ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+  }
+  function drawHalo(ctx, frame, config, dw, dh) {
+    const base = ctx.globalAlpha;
+    const size = Math.min(dw, dh);
+    const radius = size * 0.36;
+    const squash = 0.42;
+    const count = Math.max(48, Math.min(240, Math.round(config.bars * 2)));
+    const barMax = size * 0.32;
+    const hueAt = (fraction) => (fraction * 360 + 190) % 360;
+    ctx.save();
+    ctx.scale(1, squash);
+    const floor = ctx.createRadialGradient(0, 0, radius * 0.12, 0, 0, radius * 1.02);
+    floor.addColorStop(0, "rgba(0,0,0,0)");
+    floor.addColorStop(0.72, "rgba(0,0,0,0)");
+    floor.addColorStop(1, "rgba(255,255,255,0.05)");
+    ctx.fillStyle = floor;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 1.02, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    const rays = 260;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < rays; i++) {
+      const angle = i / rays * Math.PI * 2;
+      const hue = hueAt(i / rays);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const innerStart = radius * 0.42;
+      const innerEnd = radius * 0.99;
+      ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 55%, 70%, ${(base * 0.06).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(cos * innerStart, sin * innerStart * squash);
+      ctx.lineTo(cos * innerEnd, sin * innerEnd * squash);
+      ctx.stroke();
+      const outerEnd = radius * (1.44 + 0.3 * Math.sin(i * 1.7));
+      ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 24%, 90%, ${(base * 0.27).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * squash);
+      ctx.lineTo(cos * outerEnd, sin * outerEnd * squash);
+      ctx.stroke();
+    }
+    ctx.save();
+    ctx.scale(1, squash);
+    const well = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.44);
+    well.addColorStop(0, "rgba(0,0,0,1)");
+    well.addColorStop(0.66, "rgba(0,0,0,1)");
+    well.addColorStop(0.86, "rgba(0,0,0,0.72)");
+    well.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = well;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.44, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    const order = [];
+    for (let i = 0; i < count; i++) {
+      const angle = i / count * Math.PI * 2;
+      order.push({ index: i, depth: Math.sin(angle) });
+    }
+    order.sort((a, b) => a.depth - b.depth);
+    for (const entry of order) {
+      const angle = entry.index / count * Math.PI * 2;
+      const value = bandAt(frame.bands, entry.index, count);
+      const height = 5 + Math.pow(value, 1.12) * barMax;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius * squash;
+      const hue = hueAt(entry.index / count).toFixed(0);
+      const depth = 0.62 + 0.38 * ((entry.depth + 1) / 2);
+      ctx.strokeStyle = `hsl(${hue}, 96%, 60%)`;
+      ctx.globalAlpha = base * depth * 0.3;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y - height);
+      ctx.stroke();
+      ctx.globalAlpha = base * depth;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y - height);
+      ctx.stroke();
+      ctx.globalAlpha = base * depth;
+      ctx.fillStyle = `hsl(${hue}, 100%, 84%)`;
+      ctx.fillRect(x - 1, y - height - 3, 2, 3);
+    }
+    ctx.globalAlpha = base;
+    ctx.lineWidth = 1;
   }
   function drawParticles(ctx, frame, config, dw, dh) {
     const base = ctx.globalAlpha;
@@ -7133,7 +7251,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     Minimal: '<path d="M5 8V5h3M16 5h3v3M19 16v3h-3M8 19H5v-3"/><path d="M9 12h6"/>',
     Waveform: '<path d="M3 12v-2M6.5 12V7M10 12V4M13.5 12V9M17 12V6M20.5 12v-3"/>',
     Vinyl: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.4"/><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5"/>',
-    Lyrics: '<path d="M4 7h9M4 12h16M4 17h11"/><path d="M18 6v4"/>'
+    Lyrics: '<path d="M4 7h9M4 12h16M4 17h11"/><path d="M18 6v4"/>',
+    Halo: '<ellipse cx="12" cy="14" rx="9" ry="3.6"/><path d="M12 10.4V4M7 11.6V7M17 11.6V7M4.2 13v-2M19.8 13v-2"/>'
   };
   function svg(paths, size = 24) {
     return `<svg viewBox="0 0 ${size} ${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -8131,8 +8250,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
   }
   function applyLyricText(text) {
     const duration = state.song?.duration ?? 0;
-    const parsed = parseLrc(text);
-    const lines = parsed.length > 0 ? parsed : distributePlainText(text, duration);
+    const lines = parseLyrics(text, duration);
     if (lines.length === 0) {
       toast("No lyric lines found in that text.", "err");
       return;
@@ -8301,7 +8419,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
   }
   function randomizeLook() {
     const palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
-    const presets = ["NCS Circle", "Linear Bars", "Dual Mirror", "Center Wave", "Orbital", "Hexagon", "Digital Rain", "Shockwave", "Waveform", "Vinyl", "Lyrics"];
+    const presets = ["NCS Circle", "Linear Bars", "Dual Mirror", "Center Wave", "Orbital", "Hexagon", "Digital Rain", "Shockwave", "Waveform", "Vinyl", "Lyrics", "Halo"];
     commit(() => {
       state.config.primary = palette.primary;
       state.config.secondary = palette.secondary;
@@ -8609,7 +8727,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     });
     $("#btnAddText").addEventListener("click", addTextLayer);
     $("#btnRandomPreset").addEventListener("click", () => {
-      const ids = ["NCS Circle", "Linear Bars", "Dual Mirror", "Center Wave", "Orbital", "Hexagon", "Oscilloscope", "Digital Rain", "Shockwave", "Minimal", "Waveform", "Vinyl", "Lyrics"];
+      const ids = ["NCS Circle", "Linear Bars", "Dual Mirror", "Center Wave", "Orbital", "Hexagon", "Oscilloscope", "Digital Rain", "Shockwave", "Minimal", "Waveform", "Vinyl", "Lyrics", "Halo"];
       const next = ids[Math.floor(Math.random() * ids.length)];
       commit(() => {
         state.config.preset = next;

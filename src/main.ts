@@ -340,6 +340,12 @@ function syncChrome(): void {
     if (node) node.textContent = text;
   }
 
+  const lyricFont = document.querySelector<HTMLSelectElement>('#lyricFont');
+  if (lyricFont) {
+    if (lyricFont.options.length === 0) ui.buildFontSelect(lyricFont, config.lyrics.font);
+    else if (document.activeElement !== lyricFont) lyricFont.value = config.lyrics.font;
+  }
+
   const rangeStartInput = document.querySelector<HTMLInputElement>('#rangeStart');
   if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = String(Math.round(config.rangeStart * 10) / 10);
   const rangeEndInput = document.querySelector<HTMLInputElement>('#rangeEnd');
@@ -1389,6 +1395,31 @@ function bindEvents(): void {
     applyLyricText(text);
   });
 
+  ui.$('#lyricFont').addEventListener('change', (event) => {
+    state.config.lyrics.font = (event.target as HTMLSelectElement).value;
+    state.version += 1;
+  });
+
+  ui.$('#btnLyricsClear').addEventListener('click', () => {
+    commit(() => {
+      state.lyrics = [];
+      state.config.lyrics.enabled = false;
+    });
+    const area = document.querySelector<HTMLTextAreaElement>('#lyricText');
+    if (area) area.value = '';
+    ui.toast('Lyrics removed.');
+  });
+
+  ui.$('#btnLyricsReset').addEventListener('click', () => {
+    const keepEnabled = state.lyrics.length > 0;
+    commit(() => {
+      state.config.lyrics = { ...defaultConfig().lyrics, enabled: keepEnabled };
+    });
+    const fontSelect = document.querySelector<HTMLSelectElement>('#lyricFont');
+    if (fontSelect) ui.buildFontSelect(fontSelect, state.config.lyrics.font);
+    ui.toast('Lyric styling reset.');
+  });
+
   ui.$('#lyricSize').addEventListener('input', (event) => {
     state.config.lyrics.size = Number((event.target as HTMLInputElement).value);
     state.version += 1;
@@ -1576,6 +1607,8 @@ function boot(): void {
   void hydrateSystemFonts().then((added) => {
     if (!added) return;
     state.lastTextSig = '';
+    const lyricFont = document.querySelector<HTMLSelectElement>('#lyricFont');
+    if (lyricFont) ui.buildFontSelect(lyricFont, state.config.lyrics.font);
     syncChrome();
   });
 

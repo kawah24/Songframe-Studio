@@ -77,7 +77,7 @@ Photos and clips keep their licence and author. The credit line is written into 
 
 **Text** — any number of layers with font, size, colour, weight, alignment and opacity. The font menu lists the families actually installed on the machine (about 50 on a default Windows box), not a fixed six, dragged straight on the canvas and resized with the wheel.
 
-**Lyrics** — load `.lrc` or `.srt` (SubRip cues, including their end times), or paste plain text and distribute it across the song. Three styles: karaoke sweep, stacked lines, and scrolling. Position, size, visible line count, colours, pill opacity and a ±5 s timing offset.
+**Lyrics** — load `.lrc` or `.srt` (SubRip cues, including their end times), or paste plain text and distribute it across the song. Pick the lyric font, then set size, position, colours and pill opacity; *Remove* unloads them, *Reset* restores the styling. Three styles: karaoke sweep, stacked lines, and scrolling. Position, size, visible line count, colours, pill opacity and a ±5 s timing offset.
 
 **FX** — shake, glitch, VHS, CCTV, scanlines, chromatic aberration, bloom, film grain, pixelate, strobe, vignette, hue shift, letterbox. Each with its own intensity.
 

@@ -73,3 +73,12 @@ stock-photo library.
   progress follows the actual cue length instead of the gap to the next line.
   LRC, SRT and plain text are detected automatically; multi-line cues are joined
   and styling tags stripped.
+
+## 1.2.0 — 2026-10-30
+
+- **Lyrics font.** The lyric renderer had its font hardcoded; it now has its own
+  font menu, using the same installed-font list as the text layers and saved
+  with the look.
+- **Remove and Reset in Lyrics.** *Remove* unloads the lyrics and clears the text
+  box. *Reset* restores the lyric styling (font, size, position, colours, pill,
+  offset, visible lines) without discarding the lyrics you just loaded.

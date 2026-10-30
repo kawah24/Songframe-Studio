@@ -141,6 +141,46 @@ await page.waitForTimeout(150);
 const fontState = await page.evaluate(() => window.songframe.getState().text.map((layer) => layer.font));
 check(fontState.includes('Georgia'), 'font choice reaches the layer', fontState.join(','));
 
+// lyrics have their own font, and their own reset
+await page.evaluate(() => window.songframe.loadLyrics('[00:00.00]One line\n[00:01.00]Two lines'));
+await page.click('#lyricsToggle');
+await page.waitForTimeout(250);
+const lyricFontCount = await page.locator('#lyricFont option').count();
+check(lyricFontCount > 15, 'lyrics have a font menu', `${lyricFontCount}`);
+await page.selectOption('#lyricFont', 'Georgia');
+check((await state()).lyrics.font === 'Georgia', 'lyric font updates the model');
+await page.evaluate(() => {
+  const slider = document.querySelector('#lyricSize');
+  slider.value = '70';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.click('#btnLyricsReset');
+await page.waitForTimeout(250);
+const lyricsState = (await state()).lyrics;
+check(
+  lyricsState.font === 'Segoe UI' && lyricsState.size === 46 && lyricsState.pos === 'bottom',
+  'lyrics reset to defaults',
+  JSON.stringify({ font: lyricsState.font, size: lyricsState.size, pos: lyricsState.pos }),
+);
+check(lyricsState.enabled === true, 'the reset keeps the loaded lyrics');
+
+await page.click('#btnLyricsClear');
+await page.waitForTimeout(250);
+const lyricsCleared = await page.evaluate(() => ({
+  lines: window.songframe.getLyrics().length,
+  enabled: window.songframe.getState().lyrics.enabled,
+  area: document.querySelector('#lyricText').value,
+  status: document.querySelector('#lyricStatus').textContent,
+}));
+check(
+  lyricsCleared.lines === 0 &&
+    lyricsCleared.enabled === false &&
+    lyricsCleared.area === '' &&
+    lyricsCleared.status === 'No lyrics loaded',
+  'remove lyrics clears the lines, the text and the toggle',
+  JSON.stringify(lyricsCleared),
+);
+
 // sensitivity and bar count
 await page.evaluate(() => { window.songframe.setConfig({ preset: 'Linear Bars' }); window.songframe.drawAt(1); });
 const barsBase = await page.evaluate(() => document.querySelector('#preview').toDataURL('image/png'));

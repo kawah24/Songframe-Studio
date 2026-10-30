@@ -189,6 +189,8 @@
                   <div class="lyric-actions">
                     <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc / .srt</button>
                     <span class="muted" id="lyricStatus">No lyrics loaded</span>
+                    <button class="btn link small" id="btnLyricsClear" type="button" title="Remove the loaded lyrics">Remove</button>
+                    <button class="btn link small" id="btnLyricsReset" type="button" title="Reset the lyric styling">Reset</button>
                   </div>
                   <textarea id="lyricText" rows="5" placeholder="Paste lyrics, LRC or SRT here — synced files keep their timing, plain text gets distributed across the song."></textarea>
                   <button class="btn ghost small" id="btnDistribute" type="button">Distribute evenly</button>
@@ -196,6 +198,8 @@
                   <div class="seg" id="lyricStyleSeg"></div>
                   <span class="label spaced">Position</span>
                   <div class="seg" id="lyricPosSeg"></div>
+                  <span class="label spaced">Font</span>
+                  <select id="lyricFont"></select>
                   <div class="field">
                     <div class="field-top"><label for="lyricSize">Font size</label><output id="lyricSizeOut">46</output></div>
                     <input type="range" id="lyricSize" min="24" max="96" step="1" value="46" />
