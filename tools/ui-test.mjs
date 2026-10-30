@@ -256,18 +256,30 @@ for (const name of everyPreset) {
 check(deaf.length === 0, 'opacity affects every preset', deaf.length ? deaf.join(', ') : 'all 13 respond');
 await page.evaluate(() => window.songframe.setConfig({ visualizerOpacity: 1, particles: 50, bg: 'generated' }));
 
-// the halo ring is painted from the palette, not from a fixed hue wheel
-const haloPalette = await page.evaluate(() => {
-  const render = (primary, secondary) => {
-    window.songframe.setConfig({ preset: 'Halo', primary, secondary, particles: 0 });
-    window.songframe.drawAt(1.5);
-    return document.querySelector('#preview').toDataURL('image/png');
-  };
-  const warm = render('#ec4899', '#22d3ee');
-  const amber = render('#f97316', '#facc15');
-  return { warm, amber };
+// the halo ring keeps its own spectrum, whatever the palette says
+const haloHues = await page.evaluate(() => {
+  window.songframe.setConfig({ preset: 'Halo', particles: 0, primary: '#ec4899', secondary: '#22d3ee' });
+  window.songframe.drawAt(1.5);
+  const canvas = document.querySelector('#preview');
+  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  const bands = new Set();
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] / 255;
+    const g = data[i + 1] / 255;
+    const b = data[i + 2] / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta < 0.18 || (max + min) / 2 < 0.25) continue;
+    let hue = 0;
+    if (max === r) hue = ((g - b) / delta + (g < b ? 6 : 0)) * 60;
+    else if (max === g) hue = ((b - r) / delta + 2) * 60;
+    else hue = ((r - g) / delta + 4) * 60;
+    bands.add(Math.floor(hue / 30));
+  }
+  return [...bands].sort((a, b) => a - b);
 });
-check(haloPalette.warm !== haloPalette.amber, 'halo follows the palette');
+check(haloHues.length >= 6, 'halo keeps a full spectrum', `${haloHues.length} hue bands: ${haloHues.join(',')}`);
 await page.evaluate(() => window.songframe.setConfig({ preset: 'NCS Circle', primary: '#ec4899', secondary: '#22d3ee' }));
 
 // sliders are continuous and do not rebuild the panel mid-drag

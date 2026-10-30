@@ -113,3 +113,12 @@ stock-photo library.
 - **Halo is a full spectrum again.** The ring runs through every hue twice (so
   the visible back arc carries the whole wheel), anchored at the primary colour;
   the secondary tints the floor fan. Two-tone palettes no longer flatten it.
+
+## 1.4.0 — 2026-10-30
+
+- **Halo back to the first design.** The 1.1.0 look is restored: a closed
+  rainbow ring seen in perspective, bars standing all the way round, a sunburst
+  floor and a dark well in the middle. The palette experiments (two-tone sweep,
+  open aperture, palette-driven hue) are gone, and with them the `hexToHsl`
+  helper. The preset keeps its own spectrum, so primary/secondary do not change
+  it — that is what the original did.

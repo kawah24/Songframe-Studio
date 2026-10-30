@@ -642,26 +642,6 @@ function drawLyricsPreset(ctx: CanvasRenderingContext2D, frame: Frame, config: C
   ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
 }
 
-function hexToHsl(hex: string): { h: number; s: number; l: number } {
-  let value = hex.replace('#', '');
-  if (value.length === 3) value = value.split('').map((c) => c + c).join('');
-  const num = Number.parseInt((value.slice(0, 6) || '000000').padEnd(6, '0'), 16);
-  const r = ((num >> 16) & 255) / 255;
-  const g = ((num >> 8) & 255) / 255;
-  const b = (num & 255) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  if (d === 0) return { h: 0, s: 0, l: l * 100 };
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h: number;
-  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
-  else if (max === g) h = ((b - r) / d + 2) * 60;
-  else h = ((r - g) / d + 4) * 60;
-  return { h, s: s * 100, l: l * 100 };
-}
-
 function drawHalo(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -670,37 +650,20 @@ function drawHalo(
   dh: number,
 ): void {
   const base = ctx.globalAlpha;
-  // A shadow left over from the text pass would blur every stroke into a halo.
-  const shadowBlur = ctx.shadowBlur;
-  const shadowColor = ctx.shadowColor;
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
   const size = Math.min(dw, dh);
   const radius = size * 0.36;
-  // The rim is nearly edge-on so the ring opens towards the viewer; the well and
-  // the floor fan are squashed less, which is what sells the depth.
-  const squash = 0.24;
-  const raySquash = 0.5;
-  const wellSquash = 0.58;
-  const count = Math.max(60, Math.min(300, Math.round(config.bars * 3)));
-  const barMax = size * 0.3;
-  // The bars run through the full spectrum, anchored at the primary hue so the
-  // palette still turns the wheel; the secondary tints the floor fan.
-  const warm = hexToHsl(config.primary);
-  const cool = hexToHsl(config.secondary);
-  const hueAt = (fraction: number): number => (warm.h + 720 * fraction) % 360;
-  const blend = (a: number, b: number, t: number): number => {
-    const delta = ((b - a + 540) % 360) - 180;
-    return (a + delta * t + 360) % 360;
-  };
+  const squash = 0.42;
+  const count = Math.max(48, Math.min(240, Math.round(config.bars * 2)));
+  const barMax = size * 0.32;
+  const hueAt = (fraction: number): number => (fraction * 360 + 190) % 360;
 
   // The disc the ring stands on: a soft sheen inside, sunburst outside.
   ctx.save();
-  ctx.scale(1, raySquash);
+  ctx.scale(1, squash);
   const floor = ctx.createRadialGradient(0, 0, radius * 0.12, 0, 0, radius * 1.02);
-  floor.addColorStop(0, 'rgba(255,255,255,0.05)');
-  floor.addColorStop(0.5, 'rgba(255,255,255,0.02)');
-  floor.addColorStop(1, 'rgba(255,255,255,0)');
+  floor.addColorStop(0, 'rgba(0,0,0,0)');
+  floor.addColorStop(0.72, 'rgba(0,0,0,0)');
+  floor.addColorStop(1, 'rgba(255,255,255,0.05)');
   ctx.fillStyle = floor;
   ctx.beginPath();
   ctx.arc(0, 0, radius * 1.02, 0, Math.PI * 2);
@@ -712,61 +675,47 @@ function drawHalo(
   ctx.lineWidth = 1;
   for (let i = 0; i < rays; i++) {
     const angle = (i / rays) * Math.PI * 2;
-    const rayHue = blend(hueAt(i / rays), cool.h, 0.4).toFixed(0);
-    const raySat = Math.max(46, Math.min(cool.s, 78)).toFixed(0);
+    const hue = hueAt(i / rays);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
     const innerStart = radius * 0.42;
     const innerEnd = radius * 0.99;
-    ctx.strokeStyle = `hsla(${rayHue}, ${raySat}%, 70%, ${(base * 0.07).toFixed(3)})`;
+    ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 55%, 70%, ${(base * 0.06).toFixed(3)})`;
     ctx.beginPath();
-    ctx.moveTo(cos * innerStart, sin * innerStart * raySquash);
-    ctx.lineTo(cos * innerEnd, sin * innerEnd * raySquash);
+    ctx.moveTo(cos * innerStart, sin * innerStart * squash);
+    ctx.lineTo(cos * innerEnd, sin * innerEnd * squash);
     ctx.stroke();
 
-    const outerEnd = radius * (1.62 + 0.34 * Math.sin(i * 1.7));
-    ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(38, cool.s).toFixed(0)}%, 88%, ${(base * 0.26).toFixed(3)})`;
+    const outerEnd = radius * (1.44 + 0.3 * Math.sin(i * 1.7));
+    ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 24%, 90%, ${(base * 0.27).toFixed(3)})`;
     ctx.beginPath();
-    ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * raySquash);
-    ctx.lineTo(cos * outerEnd, sin * outerEnd * raySquash);
+    ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * squash);
+    ctx.lineTo(cos * outerEnd, sin * outerEnd * squash);
     ctx.stroke();
   }
 
   // The dark well in the middle.
   ctx.save();
-  ctx.scale(1, wellSquash);
-  const well = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.4);
+  ctx.scale(1, squash);
+  const well = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.44);
   well.addColorStop(0, 'rgba(0,0,0,1)');
-  well.addColorStop(0.7, 'rgba(0,0,0,1)');
-  well.addColorStop(0.88, 'rgba(0,0,0,0.75)');
+  well.addColorStop(0.66, 'rgba(0,0,0,1)');
+  well.addColorStop(0.86, 'rgba(0,0,0,0.72)');
   well.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = well;
   ctx.beginPath();
-  ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
+  ctx.arc(0, 0, radius * 0.44, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // The near half of the rim carries no bars: that is what opens the ring
-  // towards the viewer instead of closing it into a drum. Bars go far to near.
+  // Bars rise straight up, painted back to front so the front arc overlaps.
   const order: { index: number; depth: number }[] = [];
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
-    const depth = Math.sin(angle);
-    if (depth > 0.02) continue;
-    order.push({ index: i, depth });
+    order.push({ index: i, depth: Math.sin(angle) });
   }
   order.sort((a, b) => a.depth - b.depth);
-
-  // The near edge of the aperture, so the ring still reads as a circle.
-  ctx.save();
-  ctx.scale(1, squash);
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = `rgba(255,255,255,${(base * 0.3).toFixed(3)})`;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
 
   for (const entry of order) {
     const angle = (entry.index / count) * Math.PI * 2;
@@ -775,12 +724,10 @@ function drawHalo(
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius * squash;
     const hue = hueAt(entry.index / count).toFixed(0);
-    const barSat = '94';
-    const barLum = '60';
     // The far side sits slightly darker, which is what sells the tilt.
     const depth = 0.62 + 0.38 * ((entry.depth + 1) / 2);
 
-    ctx.strokeStyle = `hsl(${hue}, ${barSat}%, ${barLum}%)`;
+    ctx.strokeStyle = `hsl(${hue}, 96%, 60%)`;
     ctx.globalAlpha = base * depth * 0.3;
     ctx.lineWidth = 6;
     ctx.beginPath();
@@ -796,14 +743,12 @@ function drawHalo(
     ctx.stroke();
 
     ctx.globalAlpha = base * depth;
-    ctx.fillStyle = `hsl(${hue}, 100%, 90%)`;
+    ctx.fillStyle = `hsl(${hue}, 100%, 84%)`;
     ctx.fillRect(x - 1, y - height - 3, 2, 3);
   }
 
   ctx.globalAlpha = base;
   ctx.lineWidth = 1;
-  ctx.shadowBlur = shadowBlur;
-  ctx.shadowColor = shadowColor;
 }
 function drawParticles(ctx: CanvasRenderingContext2D, frame: Frame, config: Config, dw: number, dh: number): void {
   const base = ctx.globalAlpha;
