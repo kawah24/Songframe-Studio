@@ -817,6 +817,19 @@ select {
   font-size: 11.5px;
 }
 
+/* The popup list is drawn by the host, not by this stylesheet: without an
+   explicit option colour WebView2 paints a light grey list behind white text. */
+select option,
+select optgroup {
+  background-color: #10141c;
+  color: #e9edf6;
+}
+
+select option:checked {
+  background-color: #2b3345;
+  color: #ffffff;
+}
+
 /* ---------- accordion ---------- */
 
 .accordion {

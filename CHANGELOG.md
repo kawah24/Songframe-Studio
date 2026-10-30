@@ -82,3 +82,10 @@ stock-photo library.
 - **Remove and Reset in Lyrics.** *Remove* unloads the lyrics and clears the text
   box. *Reset* restores the lyric styling (font, size, position, colours, pill,
   offset, visible lines) without discarding the lyrics you just loaded.
+
+## 1.2.1 — 2026-10-30
+
+- **Dark dropdown lists.** The font menu opened as a light grey list with white
+  text in the desktop window, because the popup is painted by the host and had
+  no option colours. Options now carry an explicit dark background and light
+  text, so every menu matches the app.

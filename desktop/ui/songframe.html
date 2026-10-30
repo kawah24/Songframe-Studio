@@ -817,6 +817,19 @@ select {
   font-size: 11.5px;
 }
 
+/* The popup list is drawn by the host, not by this stylesheet: without an
+   explicit option colour WebView2 paints a light grey list behind white text. */
+select option,
+select optgroup {
+  background-color: #10141c;
+  color: #e9edf6;
+}
+
+select option:checked {
+  background-color: #2b3345;
+  color: #ffffff;
+}
+
 /* ---------- accordion ---------- */
 
 .accordion {
@@ -860,6 +873,10 @@ select {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.lyric-actions #btnLyricsClear {
+  margin-left: auto;
 }
 
 /* ---------- fx ---------- */
@@ -2191,6 +2208,8 @@ body.is-modal {
                   <div class="lyric-actions">
                     <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc / .srt</button>
                     <span class="muted" id="lyricStatus">No lyrics loaded</span>
+                    <button class="btn link small" id="btnLyricsClear" type="button" title="Remove the loaded lyrics">Remove</button>
+                    <button class="btn link small" id="btnLyricsReset" type="button" title="Reset the lyric styling">Reset</button>
                   </div>
                   <textarea id="lyricText" rows="5" placeholder="Paste lyrics, LRC or SRT here — synced files keep their timing, plain text gets distributed across the song."></textarea>
                   <button class="btn ghost small" id="btnDistribute" type="button">Distribute evenly</button>
@@ -2198,6 +2217,8 @@ body.is-modal {
                   <div class="seg" id="lyricStyleSeg"></div>
                   <span class="label spaced">Position</span>
                   <div class="seg" id="lyricPosSeg"></div>
+                  <span class="label spaced">Font</span>
+                  <select id="lyricFont"></select>
                   <div class="field">
                     <div class="field-top"><label for="lyricSize">Font size</label><output id="lyricSizeOut">46</output></div>
                     <input type="range" id="lyricSize" min="24" max="96" step="1" value="46" />
@@ -2740,6 +2761,7 @@ body.is-modal {
     ],
     lyrics: {
       enabled: false,
+      font: "Segoe UI",
       style: "karaoke",
       pos: "bottom",
       size: 46,
@@ -5373,7 +5395,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     ctx.save();
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    ctx.font = `700 ${fontSize}px "Segoe UI", Inter, system-ui, sans-serif`;
+    ctx.font = `700 ${fontSize}px ${fontFamily(cfg.font)}`;
     ctx.shadowColor = "rgba(0,0,0,0.65)";
     ctx.shadowBlur = fontSize * 0.35;
     ctx.fillStyle = cfg.color;
@@ -7489,6 +7511,9 @@ If you want to offset all timestamps of a track such that the first one is zero,
     if (rest.length > 0) groups.push(`<optgroup label="All installed (${rest.length})">${optionList(rest, current)}</optgroup>`);
     return groups.join("");
   }
+  function buildFontSelect(select, current) {
+    select.innerHTML = fontOptions(current);
+  }
   function escapeHtml(value) {
     return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
   }
@@ -7806,6 +7831,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
     for (const [selector, text] of Object.entries(values)) {
       const node = document.querySelector(selector);
       if (node) node.textContent = text;
+    }
+    const lyricFont = document.querySelector("#lyricFont");
+    if (lyricFont) {
+      if (lyricFont.options.length === 0) buildFontSelect(lyricFont, config.lyrics.font);
+      else if (document.activeElement !== lyricFont) lyricFont.value = config.lyrics.font;
     }
     const rangeStartInput = document.querySelector("#rangeStart");
     if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = String(Math.round(config.rangeStart * 10) / 10);
@@ -8753,6 +8783,28 @@ If you want to offset all timestamps of a track such that the first one is zero,
       }
       applyLyricText(text);
     });
+    $("#lyricFont").addEventListener("change", (event) => {
+      state.config.lyrics.font = event.target.value;
+      state.version += 1;
+    });
+    $("#btnLyricsClear").addEventListener("click", () => {
+      commit(() => {
+        state.lyrics = [];
+        state.config.lyrics.enabled = false;
+      });
+      const area = document.querySelector("#lyricText");
+      if (area) area.value = "";
+      toast("Lyrics removed.");
+    });
+    $("#btnLyricsReset").addEventListener("click", () => {
+      const keepEnabled = state.lyrics.length > 0;
+      commit(() => {
+        state.config.lyrics = { ...defaultConfig().lyrics, enabled: keepEnabled };
+      });
+      const fontSelect = document.querySelector("#lyricFont");
+      if (fontSelect) buildFontSelect(fontSelect, state.config.lyrics.font);
+      toast("Lyric styling reset.");
+    });
     $("#lyricSize").addEventListener("input", (event) => {
       state.config.lyrics.size = Number(event.target.value);
       state.version += 1;
@@ -8922,6 +8974,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     void hydrateSystemFonts().then((added) => {
       if (!added) return;
       state.lastTextSig = "";
+      const lyricFont = document.querySelector("#lyricFont");
+      if (lyricFont) buildFontSelect(lyricFont, state.config.lyrics.font);
       syncChrome();
     });
     picker = createMediaPicker({
