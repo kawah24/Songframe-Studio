@@ -516,6 +516,57 @@ check(
   'lyric glow is bright enough to see',
   JSON.stringify(glowBrightness),
 );
+
+// lyrics need a bold on/off switch, and off has to actually be lighter
+const boldToggle = await page.evaluate(() => {
+  const box = document.querySelector('#lyricBold');
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const shot = (bold) => {
+    window.songframe.setConfig({
+      preset: 'Minimal',
+      bg: 'solid',
+      particles: 0,
+      text: [],
+      lyrics: {
+        ...window.songframe.getState().lyrics,
+        enabled: true,
+        style: 'lines',
+        color: '#ffffff',
+        highlight: '#ec4899',
+        pillOpacity: 0,
+        glow: 0,
+        bold,
+      },
+    });
+    window.songframe.drawAt(1.2);
+    const y0 = Math.floor(canvas.height * 0.6);
+    const data = ctx.getImageData(0, y0, canvas.width, canvas.height - y0).data;
+    let lit = 0;
+    let minX = canvas.width;
+    let maxX = 0;
+    for (let y = 0; y < canvas.height - y0; y += 1) {
+      for (let x = 0; x < canvas.width; x += 1) {
+        const i = (y * canvas.width + x) * 4;
+        if (data[i] > 120) {
+          lit += 1;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+        }
+      }
+    }
+    return { lit, width: maxX - minX };
+  };
+  return { exists: Boolean(box), checked: box ? box.checked : null, on: shot(true), off: shot(false) };
+});
+check(
+  boldToggle.exists &&
+    boldToggle.checked === true &&
+    boldToggle.on.width > boldToggle.off.width * 1.03 &&
+    boldToggle.off.lit < boldToggle.on.lit,
+  'lyrics have a bold switch that lightens the type',
+  JSON.stringify(boldToggle),
+);
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 

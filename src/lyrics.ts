@@ -247,7 +247,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
     let rows: LyricRow[] = [];
     let widest = 0;
     for (let attempt = 0; attempt < 6; attempt++) {
-      ctx.font = `700 ${size}px ${family}`;
+      ctx.font = `${weight} ${size}px ${family}`;
       const words: { text: string; start: number }[] = [];
       const scan = /\S+/g;
       let hit = scan.exec(text);
@@ -283,14 +283,15 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       if (widest <= maxWidth || size <= 9) break;
       size = Math.max(9, size * (maxWidth / widest) * 0.98);
     }
-    ctx.font = `700 ${size}px ${family}`;
+    ctx.font = `${weight} ${size}px ${family}`;
     return { rows, size, widest };
   };
 
   ctx.save();
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
-  ctx.font = `700 ${cfg.size}px ${family}`;
+  const weight = cfg.bold === false ? 400 : 700;
+  ctx.font = `${weight} ${cfg.size}px ${family}`;
   const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
   // The black drop shadow is painted over the glow, so ease it back as the glow
   // comes up, otherwise the halo is smothered before it can be seen.
@@ -417,7 +418,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       cursor += blockHeight + gap;
     }
   } else {
-    ctx.font = `700 ${cfg.size}px ${family}`;
+    ctx.font = `${weight} ${cfg.size}px ${family}`;
     const metrics = ctx.measureText(current.text);
     const travel = width + metrics.width;
     const x = width * 0.5 - progress * travel;

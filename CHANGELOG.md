@@ -188,3 +188,12 @@ stock-photo library.
 - Note the glow follows the **Text** colour. In Karaoke style the swept part of
   the line is painted with **Highlight**, so a pink line with a white glow is the
   expected combination, not a colour bug.
+
+## 1.7.5 — 2026-10-30
+
+- **Bold on/off for lyrics.** The lyric panel gained a `Bold` checkbox next to
+  "Show section lines". Lyric type was hard-coded to 700; it now uses 400 when
+  the box is cleared, across all three styles, and the row-fitting measure uses
+  the same weight so wrapped lines stay correct.
+- Saved looks from older versions still render bold, since an absent field means
+  bold — the historical look is unchanged.

@@ -60,6 +60,8 @@ export interface TextLayer {
 export interface LyricsConfig {
   enabled: boolean;
   font: FontId;
+  /** Bold lyrics weight; absent means bold, which is the historical look. */
+  bold?: boolean;
   /** Neon halo strength, 0..1. */
   glow: number;
   style: LyricsStyle;
