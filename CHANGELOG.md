@@ -89,3 +89,10 @@ stock-photo library.
   text in the desktop window, because the popup is painted by the host and had
   no option colours. Options now carry an explicit dark background and light
   text, so every menu matches the app.
+
+## 1.2.2 — 2026-10-30
+
+- **Halo follows the palette.** The ring was painted from a fixed hue wheel, so
+  primary and secondary had no effect on it. The hue now sweeps from the primary
+  colour to the secondary and back around the circle, and the sunburst picks up
+  the same tint.

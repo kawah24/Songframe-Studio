@@ -223,6 +223,20 @@ for (const name of everyPreset) {
 check(deaf.length === 0, 'opacity affects every preset', deaf.length ? deaf.join(', ') : 'all 13 respond');
 await page.evaluate(() => window.songframe.setConfig({ visualizerOpacity: 1, particles: 50, bg: 'generated' }));
 
+// the halo ring is painted from the palette, not from a fixed hue wheel
+const haloPalette = await page.evaluate(() => {
+  const render = (primary, secondary) => {
+    window.songframe.setConfig({ preset: 'Halo', primary, secondary, particles: 0 });
+    window.songframe.drawAt(1.5);
+    return document.querySelector('#preview').toDataURL('image/png');
+  };
+  const warm = render('#ec4899', '#22d3ee');
+  const amber = render('#f97316', '#facc15');
+  return { warm, amber };
+});
+check(haloPalette.warm !== haloPalette.amber, 'halo follows the palette');
+await page.evaluate(() => window.songframe.setConfig({ preset: 'NCS Circle', primary: '#ec4899', secondary: '#22d3ee' }));
+
 // sliders are continuous and do not rebuild the panel mid-drag
 await page.click('.tab[data-tab="text"]');
 await page.click('#btnAddText');

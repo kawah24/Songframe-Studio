@@ -642,6 +642,26 @@ function drawLyricsPreset(ctx: CanvasRenderingContext2D, frame: Frame, config: C
   ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
 }
 
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  let value = hex.replace('#', '');
+  if (value.length === 3) value = value.split('').map((c) => c + c).join('');
+  const num = Number.parseInt((value.slice(0, 6) || '000000').padEnd(6, '0'), 16);
+  const r = ((num >> 16) & 255) / 255;
+  const g = ((num >> 8) & 255) / 255;
+  const b = (num & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l: l * 100 };
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+  else if (max === g) h = ((b - r) / d + 2) * 60;
+  else h = ((r - g) / d + 4) * 60;
+  return { h, s: s * 100, l: l * 100 };
+}
+
 function drawHalo(
   ctx: CanvasRenderingContext2D,
   frame: Frame,
@@ -655,7 +675,19 @@ function drawHalo(
   const squash = 0.42;
   const count = Math.max(48, Math.min(240, Math.round(config.bars * 2)));
   const barMax = size * 0.32;
-  const hueAt = (fraction: number): number => (fraction * 360 + 190) % 360;
+  // The ring is painted from the palette: the hue sweeps from the primary to
+  // the secondary colour and back around the circle.
+  const warm = hexToHsl(config.primary);
+  const cool = hexToHsl(config.secondary);
+  const hueSpan = ((cool.h - warm.h + 540) % 360) - 180;
+  const colourAt = (fraction: number): { h: number; s: number; l: number } => {
+    const t = 1 - Math.abs(2 * fraction - 1);
+    return {
+      h: (warm.h + hueSpan * t + 360) % 360,
+      s: warm.s + (cool.s - warm.s) * t,
+      l: warm.l + (cool.l - warm.l) * t,
+    };
+  };
 
   // The disc the ring stands on: a soft sheen inside, sunburst outside.
   ctx.save();
@@ -675,20 +707,22 @@ function drawHalo(
   ctx.lineWidth = 1;
   for (let i = 0; i < rays; i++) {
     const angle = (i / rays) * Math.PI * 2;
-    const hue = hueAt(i / rays);
+    const ray = colourAt(i / rays);
+    const rayHue = ray.h.toFixed(0);
+    const raySat = Math.min(ray.s, 62).toFixed(0);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
     const innerStart = radius * 0.42;
     const innerEnd = radius * 0.99;
-    ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 55%, 70%, ${(base * 0.06).toFixed(3)})`;
+    ctx.strokeStyle = `hsla(${rayHue}, ${raySat}%, 70%, ${(base * 0.07).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(cos * innerStart, sin * innerStart * squash);
     ctx.lineTo(cos * innerEnd, sin * innerEnd * squash);
     ctx.stroke();
 
     const outerEnd = radius * (1.44 + 0.3 * Math.sin(i * 1.7));
-    ctx.strokeStyle = `hsla(${hue.toFixed(0)}, 24%, 90%, ${(base * 0.27).toFixed(3)})`;
+    ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(24, ray.s).toFixed(0)}%, 90%, ${(base * 0.27).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * squash);
     ctx.lineTo(cos * outerEnd, sin * outerEnd * squash);
@@ -723,11 +757,14 @@ function drawHalo(
     const height = 5 + Math.pow(value, 1.12) * barMax;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius * squash;
-    const hue = hueAt(entry.index / count).toFixed(0);
+    const bar = colourAt(entry.index / count);
+    const hue = bar.h.toFixed(0);
+    const barSat = Math.max(bar.s, 58).toFixed(0);
+    const barLum = Math.min(80, Math.max(54, bar.l + 10)).toFixed(0);
     // The far side sits slightly darker, which is what sells the tilt.
     const depth = 0.62 + 0.38 * ((entry.depth + 1) / 2);
 
-    ctx.strokeStyle = `hsl(${hue}, 96%, 60%)`;
+    ctx.strokeStyle = `hsl(${hue}, ${barSat}%, ${barLum}%)`;
     ctx.globalAlpha = base * depth * 0.3;
     ctx.lineWidth = 6;
     ctx.beginPath();
@@ -743,7 +780,7 @@ function drawHalo(
     ctx.stroke();
 
     ctx.globalAlpha = base * depth;
-    ctx.fillStyle = `hsl(${hue}, 100%, 84%)`;
+    ctx.fillStyle = `hsl(${hue}, 100%, 90%)`;
     ctx.fillRect(x - 1, y - height - 3, 2, 3);
   }
 
