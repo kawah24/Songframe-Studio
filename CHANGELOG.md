@@ -160,3 +160,11 @@ stock-photo library.
   clipped.
 - Hit-testing now measures with the same quoted font stack the renderer uses, so
   clicking a layer in a font with spaces in its name lands on the glyphs.
+
+## 1.7.2 — 2026-10-30
+
+- **Shake is a camera move, and the intensity now matters.** It used to be gated
+  on `bass > 0.55` and only translated the visualizer group, so on most tracks the
+  slider did nothing at all. The frame now drifts continuously with the music,
+  scaled by `bass^1.6`, up to 52px at 1080p and full intensity. The moved frame is
+  drawn with a 6% over-scale, so no empty edge can appear.

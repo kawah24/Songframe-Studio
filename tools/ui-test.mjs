@@ -426,6 +426,33 @@ const glowProbe = await page.evaluate(() => {
   return { textOff: shot(0, true), textOn: shot(0.9, true), lyricOff: shot(0, false), lyricOn: shot(0.9, false) };
 });
 check(glowProbe.textOff !== glowProbe.textOn, 'text glow changes the frame');
+
+// shake must respond to intensity even when the bass never goes high
+const shakeRange = await page.evaluate(() => {
+  let quiet = null;
+  for (let t = 0.2; t < 3; t += 0.1) {
+    const frame = window.songframe.getFrame(t);
+    if (frame && frame.bass < 0.35) {
+      quiet = Number(t.toFixed(2));
+      break;
+    }
+  }
+  const shot = (amount) => {
+    window.songframe.setConfig({
+      preset: 'Linear Bars',
+      bg: 'generated',
+      particles: 0,
+      text: [],
+      effects: { ...window.songframe.getState().effects, shake: true },
+      amounts: { ...window.songframe.getState().amounts, shake: amount },
+    });
+    window.songframe.drawAt(quiet);
+    return document.querySelector('#preview').toDataURL('image/png');
+  };
+  if (quiet === null) return { quiet, differs: false };
+  return { quiet, differs: shot(1) !== shot(0.1) };
+});
+check(shakeRange.quiet !== null && shakeRange.differs, 'shake intensity responds at moderate bass', JSON.stringify(shakeRange));
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 
