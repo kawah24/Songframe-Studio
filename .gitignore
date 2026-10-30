@@ -1,0 +1,9 @@
+node_modules/
+.venv/
+desktop/build/
+desktop/dist/
+desktop/Songframe.spec
+tools/out/
+releases/
+*.log
+*.prev.exe

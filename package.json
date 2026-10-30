@@ -1,0 +1,22 @@
+{
+  "name": "songframe",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Songframe Studio - a standalone, offline song-to-video visualizer studio. Upload a track, design the look, render MP4.",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node tools/smoke.mjs",
+    "ui-test": "node tools/ui-test.mjs",
+    "shots": "node tools/ui-shots.mjs",
+    "desktop": "node build.mjs && node tools/pack-desktop.mjs"
+  },
+  "dependencies": {
+    "mp4-muxer": "^5.2.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.48.0",
+    "typescript": "^5.6.0"
+  }
+}

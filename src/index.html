@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Songframe Studio</title>
+    <meta name="description" content="Turn a song into a video. Offline, in your browser." />
+    <!--STYLES-->
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 14v-4M8 17V7M12 20V4M16 16V8M20 13v-2" />
+            </svg>
+          </span>
+          <span class="brand-name">Songframe</span>
+          <span class="brand-sub">Studio</span>
+        </div>
+        <div class="topbar-right">
+          <span class="chip" id="formatChip">16:9 · 1080p · 30 fps</span>
+          <div class="theme-anchor">
+            <button class="btn icon" id="btnTheme" type="button" title="Theme colour" aria-label="Theme colour" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.6" cy="13.4" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.4" cy="13.4" r="1.5" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <div class="theme-pop" id="themePop" hidden>
+              <span class="theme-head">Theme</span>
+              <div id="themeList"></div>
+            </div>
+          </div>
+          <button class="btn icon" id="btnNewSong" type="button" title="Load another song" aria-label="Load another song" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 14h14l-7-9-7 9Z"/><path d="M5 18h14"/></svg>
+          </button>
+          <button class="btn ghost" id="btnRandomize" type="button" title="Surprise me with a whole new look">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+            Randomize
+          </button>
+          <button class="btn primary" id="btnRender" type="button" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 14 8-14 8V4Z"/></svg>
+            Render MP4
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="panel">
+          <nav class="tabs" role="tablist" aria-label="Design tabs">
+            <button class="tab is-active" role="tab" aria-selected="true" data-tab="presets" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+              Presets
+            </button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="style" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H13a2 2 0 0 1 0-4h4a4 4 0 0 0 4-4 5 5 0 0 0-9-5Z"/><circle cx="7.5" cy="10.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="10" cy="7" r="1.2" fill="currentColor" stroke="none"/><circle cx="7" cy="15" r="1.2" fill="currentColor" stroke="none"/></svg>
+              Style
+            </button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="text" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M9 6v13M15 12h5M17.5 12v7"/></svg>
+              Text
+            </button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="fx" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.2 4.8L19 10l-4.8 2.2L12 17l-2.2-4.8L5 10l4.8-2.2L12 3Z"/><path d="M18.5 15.5 19.6 18l2.4 1.1-2.4 1.1-1.1 2.3-1.1-2.3-2.4-1.1 2.4-1.1 1.1-2.5Z"/></svg>
+              FX
+            </button>
+          </nav>
+
+          <div class="panes">
+            <section class="pane is-active" data-pane="presets">
+              <div class="pane-head">
+                <div>
+                  <h2>Visualizer</h2>
+                  <p>The shape the music moves.</p>
+                </div>
+                <button class="btn icon" id="btnRandomPreset" type="button" title="Random preset" aria-label="Random preset">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor" stroke="none"/></svg>
+                </button>
+              </div>
+              <div class="preset-grid" id="presetGrid"></div>
+              <div class="group">
+                <div class="field">
+                  <div class="field-top"><label for="sensitivity">Sensitivity</label><output id="sensitivityOut">100%</output></div>
+                  <input type="range" id="sensitivity" min="50" max="200" step="1" value="100" />
+                  <p class="hint">How hard the music pushes the visualizer. Lower it when the bars sit pinned at the top.</p>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="bars">Bar count</label><output id="barsOut">64</output></div>
+                  <input type="range" id="bars" min="16" max="128" step="1" value="64" />
+                  <p class="hint">Bars, rows or columns, depending on the preset.</p>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="particles">Particles</label><output id="particlesOut">50</output></div>
+                  <input type="range" id="particles" min="0" max="200" step="1" value="50" />
+                  <p class="hint">Dust, sparks and orbiters drifting around the visualizer.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="pane" data-pane="style">
+              <div class="pane-head"><div><h2>Frame</h2><p>Shape, size and pacing of the export.</p></div></div>
+
+              <div class="group">
+                <span class="label">Aspect ratio</span>
+                <div class="seg" id="aspectSeg"></div>
+              </div>
+
+              <div class="group">
+                <span class="label">Output size</span>
+                <div class="seg" id="sizeSeg"></div>
+                <span class="label spaced">Frame rate</span>
+                <div class="seg" id="fpsSeg"></div>
+                <span class="label spaced">Audio bitrate</span>
+                <div class="seg" id="bitrateSeg"></div>
+                <div class="field">
+                  <div class="field-top"><label for="quality">Video quality</label><output id="qualityOut">Balanced</output></div>
+                  <input type="range" id="quality" min="50" max="180" step="1" value="100" />
+                  <p class="hint">Higher means a larger file. 100% is the balanced default.</p>
+                </div>
+                <span class="label spaced">Render range</span>
+                <div class="range-row">
+                  <label class="range-field"><span>From</span><input type="number" id="rangeStart" min="0" step="0.1" value="0" /></label>
+                  <label class="range-field"><span>To</span><input type="number" id="rangeEnd" min="0" step="0.1" value="0" /></label>
+                </div>
+                <button class="btn ghost small" id="btnRangePlayhead" type="button">Start at the playhead</button>
+                <p class="hint">Seconds. Leave “To” at 0 to render to the end of the song.</p>
+              </div>
+
+              <div class="group">
+                <span class="label">Background</span>
+                <div class="seg" id="bgSeg"></div>
+                <div class="bg-tools" id="bgTools"></div>
+                <div class="field">
+                  <div class="field-top"><label for="dim">Dimming</label><output id="dimOut">60%</output></div>
+                  <input type="range" id="dim" min="0" max="100" step="1" value="60" />
+                </div>
+              </div>
+
+              <div class="group">
+                <span class="label">Palette</span>
+                <div class="swatches" id="swatches"></div>
+                <div class="color-row">
+                  <label class="color-field"><span>Primary</span><input type="color" id="primary" value="#ec4899" /><em id="primaryHex">#ec4899</em></label>
+                  <label class="color-field"><span>Secondary</span><input type="color" id="secondary" value="#8b5cf6" /><em id="secondaryHex">#8b5cf6</em></label>
+                </div>
+              </div>
+
+              <div class="group">
+                <div class="field">
+                  <div class="field-top"><label for="scale">Visualizer size</label><output id="scaleOut">100%</output></div>
+                  <input type="range" id="scale" min="30" max="200" step="1" value="100" />
+                  <div class="field-top" style="margin-top: 6px"><label for="opacity">Opacity</label><output id="opacityOut">100%</output></div>
+                  <input type="range" id="opacity" min="0" max="100" step="1" value="100" />
+                  <p class="hint">Drag the visualizer on the canvas to move it. Scroll to resize.</p>
+                </div>
+              </div>
+
+              <div class="group">
+                <span class="label">Centre image</span>
+                <div class="center-art">
+                  <div class="thumb" id="coverThumb"></div>
+                  <div class="center-art-actions">
+                    <div class="center-art-row">
+                      <button class="btn ghost small" id="btnCover" type="button">Choose image</button>
+                      <button class="btn ghost small" id="btnCoverLibrary" type="button">Library</button>
+                    </div>
+                    <div class="center-art-row">
+                      <button class="btn link small" id="btnCoverDefault" type="button">Default logo</button>
+                      <button class="btn link small" id="btnCoverReset" type="button">Generated art</button>
+                    </div>
+                    <span class="credit-line" id="coverCredit" hidden></span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="pane" data-pane="text">
+              <div class="pane-head">
+                <div><h2>Text</h2><p>Drag on the canvas to place it.</p></div>
+                <button class="btn ghost small" id="btnAddText" type="button">Add layer</button>
+              </div>
+              <div class="text-list" id="textList"></div>
+
+              <div class="group">
+                <button class="accordion" id="lyricsToggle" type="button" aria-expanded="false">
+                  <span>Lyrics</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="accordion-body" id="lyricsBody" hidden>
+                  <div class="lyric-actions">
+                    <button class="btn ghost small" id="btnLoadLrc" type="button">Load .lrc</button>
+                    <span class="muted" id="lyricStatus">No lyrics loaded</span>
+                  </div>
+                  <textarea id="lyricText" rows="5" placeholder="Paste lyrics here and press Distribute to spread them across the song."></textarea>
+                  <button class="btn ghost small" id="btnDistribute" type="button">Distribute evenly</button>
+
+                  <div class="seg" id="lyricStyleSeg"></div>
+                  <span class="label spaced">Position</span>
+                  <div class="seg" id="lyricPosSeg"></div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricSize">Font size</label><output id="lyricSizeOut">46</output></div>
+                    <input type="range" id="lyricSize" min="24" max="96" step="1" value="46" />
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricLines">Visible lines</label><output id="lyricLinesOut">2</output></div>
+                    <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricOffset">Timing offset</label><output id="lyricOffsetOut">0.0 s</output></div>
+                    <input type="range" id="lyricOffset" min="-500" max="500" step="5" value="0" />
+                  </div>
+                  <label class="check"><input type="checkbox" id="lyricSections" /> Show section lines</label>
+                  <div class="color-row">
+                    <label class="color-field"><span>Text</span><input type="color" id="lyricColor" value="#ffffff" /></label>
+                    <label class="color-field"><span>Highlight</span><input type="color" id="lyricHighlight" value="#ec4899" /></label>
+                    <label class="color-field"><span>Pill</span><input type="color" id="lyricPill" value="#000000" /></label>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricPillOpacity">Pill opacity</label><output id="lyricPillOpacityOut">50%</output></div>
+                    <input type="range" id="lyricPillOpacity" min="0" max="100" step="1" value="50" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="pane" data-pane="fx">
+              <div class="pane-head"><div><h2>Effects</h2><p>Stacked after the frame is drawn.</p></div></div>
+              <div class="fx-list" id="fxList"></div>
+            </section>
+          </div>
+
+          <footer class="panel-foot">
+            <button class="btn ghost small" id="btnSaveLook" type="button">Save look</button>
+            <button class="btn ghost small" id="btnLoadLook" type="button">Load look</button>
+            <button class="btn ghost small" id="btnExportFrame" type="button" disabled>Save frame</button>
+            <button class="btn ghost small" id="btnResetAll" type="button">Reset all</button>
+          </footer>
+        </aside>
+
+        <section class="stage">
+          <div class="stage-frame" id="stageFrame">
+            <div class="frame" id="frame">
+              <canvas id="preview" aria-label="Video preview"></canvas>
+              <span class="stage-badge" id="stageBadge">16:9</span>
+              <div class="stage-hint" id="stageHint" hidden>Drag to move · scroll to resize</div>
+            </div>
+            <div class="empty" id="emptyState">
+              <div class="drop-card">
+                <div class="drop-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>
+                </div>
+                <h2>Drop a song to start</h2>
+                <p>MP3 · WAV · FLAC · OGG · M4A</p>
+                <button class="btn primary" id="btnChooseAudio" type="button">Choose file</button>
+                <span class="drop-sub">or drop it anywhere in this window</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="transport">
+            <button class="play" id="btnPlay" type="button" aria-label="Play" disabled>
+              <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5L8 5.5Z" /></svg>
+              <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="7" y="5" width="4" height="14" rx="1.2" /><rect x="13.5" y="5" width="4" height="14" rx="1.2" /></svg>
+            </button>
+            <span class="time" id="timeNow">0:00</span>
+            <div class="seek">
+              <canvas id="seekCanvas" aria-hidden="true"></canvas>
+              <input type="range" id="seekRange" min="0" max="1000" step="1" value="0" aria-label="Seek" />
+            </div>
+            <span class="time dim" id="timeTotal">0:00</span>
+            <div class="volume">
+              <button class="btn icon" id="btnMute" type="button" aria-label="Mute">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M17 8.5a5 5 0 0 1 0 7" /></svg>
+              </button>
+              <input type="range" id="volume" min="0" max="100" step="1" value="100" aria-label="Volume" />
+            </div>
+          </div>
+
+          <div class="stage-meta">
+            <span id="metaLeft">No song loaded</span>
+            <span id="metaRight">H.264 + AAC · rendered on this machine</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal" id="renderModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="renderTitle">
+        <h2 id="renderTitle">Rendering your video</h2>
+        <p class="modal-sub" id="renderSub">Analysing the song, then encoding every frame.</p>
+        <div class="progress"><div class="progress-bar" id="renderBar"></div></div>
+        <div class="modal-row"><span id="renderPercent">0%</span><span id="renderDetail">Starting…</span></div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="btnCancelRender" type="button">Cancel</button>
+          <button class="btn primary" id="btnCloseRender" type="button" hidden>Close</button>
+        </div>
+        <div class="render-result" id="renderResult" hidden>
+          <div class="render-file" id="renderFile"></div>
+          <div class="render-meta" id="renderMeta"></div>
+          <div class="render-actions">
+            <a class="btn ghost small" id="btnDownloadAgain" download>Download again</a>
+            <button class="btn ghost small" id="btnReveal" type="button" hidden>Show in folder</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <input type="file" id="fileAudio" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac" hidden />
+    <input type="file" id="fileImage" accept="image/*" hidden />
+    <input type="file" id="fileVideo" accept="video/*" hidden />
+    <input type="file" id="fileCover" accept="image/*" hidden />
+    <input type="file" id="fileLyrics" accept=".lrc,.txt,text/plain" hidden />
+    <input type="file" id="fileLook" accept=".json,application/json" hidden />
+
+    <!--APP-->
+  </body>
+</html>
