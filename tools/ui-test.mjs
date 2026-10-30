@@ -437,22 +437,42 @@ const shakeRange = await page.evaluate(() => {
       break;
     }
   }
+  if (quiet === null) return { quiet: null, centre: 0, outside: 0 };
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
   const shot = (amount) => {
     window.songframe.setConfig({
-      preset: 'Linear Bars',
-      bg: 'generated',
+      preset: 'NCS Circle',
+      bg: 'solid',
       particles: 0,
       text: [],
       effects: { ...window.songframe.getState().effects, shake: true },
       amounts: { ...window.songframe.getState().amounts, shake: amount },
+      lyrics: { ...window.songframe.getState().lyrics, enabled: false },
     });
     window.songframe.drawAt(quiet);
-    return document.querySelector('#preview').toDataURL('image/png');
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
   };
-  if (quiet === null) return { quiet, differs: false };
-  return { quiet, differs: shot(1) !== shot(0.1) };
+  const low = shot(0.15).data;
+  const high = shot(1).data;
+  const w = canvas.width;
+  const h = canvas.height;
+  let centre = 0;
+  let corner = 0;
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      const i = (y * w + x) * 4;
+      const changed = Math.abs(low[i] - high[i]) + Math.abs(low[i + 1] - high[i + 1]) + Math.abs(low[i + 2] - high[i + 2]) > 12;
+      if (!changed) continue;
+      if (Math.abs(x / w - 0.5) < 0.2 && Math.abs(y / h - 0.5) < 0.26) centre += 1;
+      // far away from the disc: the background must not join in
+      if (x / w < 0.2 && y / h < 0.2) corner += 1;
+    }
+  }
+  return { quiet, centre, corner };
 });
-check(shakeRange.quiet !== null && shakeRange.differs, 'shake intensity responds at moderate bass', JSON.stringify(shakeRange));
+check(shakeRange.centre > 200, 'shake intensity moves the centre art', JSON.stringify(shakeRange));
+check(shakeRange.corner === 0, 'shake leaves the background alone', JSON.stringify(shakeRange));
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 

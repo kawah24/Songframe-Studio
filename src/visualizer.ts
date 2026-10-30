@@ -65,7 +65,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
   ctx.translate(cx, cy);
   if (scale !== 1) ctx.scale(scale, scale);
 
-  // Shake is a camera move on the whole frame, so it lives in applyEffects.
+  // Shake moves the centre art, see drawCenterArt().
 
   switch (config.preset) {
     case 'NCS Circle':
@@ -116,7 +116,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
   if (config.preset !== 'Lyrics') drawParticles(ctx, frame, config, dw, dh);
 
   if (config.preset === 'NCS Circle' || config.preset === 'Hexagon' || config.preset === 'Orbital' || config.preset === 'Shockwave') {
-    drawCenterArt(ctx, pulse, config, assets);
+    drawCenterArt(ctx, pulse, config, assets, frame);
   }
   ctx.restore();
 
@@ -834,9 +834,24 @@ function drawParticles(ctx: CanvasRenderingContext2D, frame: Frame, config: Conf
   ctx.restore();
 }
 
-function drawCenterArt(ctx: CanvasRenderingContext2D, pulse: number, config: Config, assets: Assets): void {
+function drawCenterArt(
+  ctx: CanvasRenderingContext2D,
+  pulse: number,
+  config: Config,
+  assets: Assets,
+  frame: Frame,
+): void {
   const art = assets.cover;
+  // Shake belongs to the centre art: it is the thing that should rattle with
+  // the beat, not the whole picture.
+  const strength = config.effects.shake ? config.amounts.shake * Math.pow(frame.bass, 1.6) : 0;
   ctx.save();
+  if (strength > 0.002) {
+    const magnitude = strength * 34;
+    const rnd = mulberry32(Math.floor(frame.t * 60) * 2654435761 + 101);
+    ctx.translate((rnd() - 0.5) * magnitude, (rnd() - 0.5) * magnitude);
+    ctx.rotate((rnd() - 0.5) * 0.07 * strength);
+  }
   ctx.scale(pulse, pulse);
   ctx.shadowBlur = 42;
   ctx.shadowColor = config.primary;
@@ -1011,24 +1026,6 @@ function applyEffects(
     ctx.filter = `hue-rotate(${degrees.toFixed(1)}deg)`;
     ctx.drawImage(ctx.canvas, 0, 0);
     ctx.filter = 'none';
-  }
-
-  if (effects.shake) {
-    // Continuous, not gated: the frame drifts with every beat instead of
-    // snapping on only above a threshold most tracks never reach.
-    const strength = amounts.shake * Math.pow(frame.bass, 1.6);
-    if (strength > 0.004) {
-      const magnitude = strength * 52 * k;
-      const rnd = mulberry32(Math.floor(frame.t * 60) * 2654435761 + 101);
-      const dx = (rnd() - 0.5) * magnitude;
-      const dy = (rnd() - 0.5) * magnitude;
-      ctx.save();
-      ctx.translate(width / 2 + dx, height / 2 + dy);
-      // Slight over-scale so the moved frame never exposes an empty edge.
-      ctx.scale(1.06, 1.06);
-      ctx.drawImage(ctx.canvas, -width / 2, -height / 2);
-      ctx.restore();
-    }
   }
 
   if (effects.kaleidoscope) {

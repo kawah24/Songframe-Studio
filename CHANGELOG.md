@@ -168,3 +168,11 @@ stock-photo library.
   slider did nothing at all. The frame now drifts continuously with the music,
   scaled by `bass^1.6`, up to 52px at 1080p and full intensity. The moved frame is
   drawn with a 6% over-scale, so no empty edge can appear.
+
+## 1.7.3 — 2026-10-30
+
+- **Shake moves the centre art, not the whole frame.** 1.7.2 made it a camera
+  move on the entire picture; that was the wrong target. The disc and its cover
+  image now rattle with the beat (up to 34px and a small tilt), and a pixel diff
+  confirms nothing outside the disc changes. The continuous `bass^1.6` response
+  from 1.7.2 stays, so the slider is audible at low bass too.
