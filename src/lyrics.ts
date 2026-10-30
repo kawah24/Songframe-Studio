@@ -317,6 +317,28 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
     ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, Math.min(pillHeight, size * 1.5) / 2);
     ctx.fill();
 
+    const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+    if (glow > 0) {
+      const keepBlur = ctx.shadowBlur;
+      const keepColor = ctx.shadowColor;
+      const keepX = ctx.shadowOffsetX;
+      const keepY = ctx.shadowOffsetY;
+      ctx.fillStyle = cfg.color;
+      ctx.shadowColor = cfg.color;
+      ctx.shadowBlur = size * 0.55 * glow;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.globalAlpha = 0.75;
+      rows.forEach((row, index) => {
+        ctx.fillText(row.text, 0, top + index * lineHeight);
+      });
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = keepBlur;
+      ctx.shadowColor = keepColor;
+      ctx.shadowOffsetX = keepX;
+      ctx.shadowOffsetY = keepY;
+    }
+
     const total = Math.max(1, text.length);
     rows.forEach((row, i) => {
       const rowY = top + i * lineHeight;
@@ -361,6 +383,26 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
         ctx.fill();
         ctx.restore();
       }
+      const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+      if (glow > 0 && entry.active) {
+        const keepBlur = ctx.shadowBlur;
+        const keepColor = ctx.shadowColor;
+        const keepX = ctx.shadowOffsetX;
+        const keepY = ctx.shadowOffsetY;
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = cfg.color;
+        ctx.shadowColor = cfg.color;
+        ctx.shadowBlur = entry.size * 0.55 * glow;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        entry.rows.forEach((row, i) => {
+          ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
+        });
+        ctx.shadowBlur = keepBlur;
+        ctx.shadowColor = keepColor;
+        ctx.shadowOffsetX = keepX;
+        ctx.shadowOffsetY = keepY;
+      }
       ctx.globalAlpha = alpha;
       entry.rows.forEach((row, i) => {
         ctx.fillStyle = cfg.color;
@@ -377,6 +419,25 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
     ctx.fillStyle = pill;
     ctx.fillRect(-width / 2, y - cfg.size * 0.85, width, cfg.size * 1.7);
     ctx.textAlign = 'left';
+    const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+    if (glow > 0) {
+      const keepBlur = ctx.shadowBlur;
+      const keepColor = ctx.shadowColor;
+      const keepX = ctx.shadowOffsetX;
+      const keepY = ctx.shadowOffsetY;
+      ctx.fillStyle = cfg.color;
+      ctx.shadowColor = cfg.color;
+      ctx.shadowBlur = cfg.size * 0.55 * glow;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.globalAlpha = 0.75;
+      ctx.fillText(current.text, x, y);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = keepBlur;
+      ctx.shadowColor = keepColor;
+      ctx.shadowOffsetX = keepX;
+      ctx.shadowOffsetY = keepY;
+    }
     ctx.fillStyle = cfg.color;
     ctx.fillText(current.text, x, y);
   }

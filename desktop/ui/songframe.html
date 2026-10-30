@@ -2224,6 +2224,10 @@ body.is-modal {
                     <input type="range" id="lyricSize" min="24" max="96" step="1" value="46" />
                   </div>
                   <div class="field">
+                    <div class="field-top"><label for="lyricGlow">Glow</label><output id="lyricGlowOut">0%</output></div>
+                    <input type="range" id="lyricGlow" min="0" max="100" step="1" value="0" />
+                  </div>
+                  <div class="field">
                     <div class="field-top"><label for="lyricLines">Visible lines</label><output id="lyricLinesOut">2</output></div>
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
                   </div>
@@ -2771,6 +2775,7 @@ body.is-modal {
     lyrics: {
       enabled: false,
       font: "Segoe UI",
+      glow: 0,
       style: "karaoke",
       pos: "bottom",
       size: 46,
@@ -5472,6 +5477,27 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.beginPath();
       ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, Math.min(pillHeight, size * 1.5) / 2);
       ctx.fill();
+      const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+      if (glow > 0) {
+        const keepBlur = ctx.shadowBlur;
+        const keepColor = ctx.shadowColor;
+        const keepX = ctx.shadowOffsetX;
+        const keepY = ctx.shadowOffsetY;
+        ctx.fillStyle = cfg.color;
+        ctx.shadowColor = cfg.color;
+        ctx.shadowBlur = size * 0.55 * glow;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.globalAlpha = 0.75;
+        rows.forEach((row, index2) => {
+          ctx.fillText(row.text, 0, top + index2 * lineHeight);
+        });
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = keepBlur;
+        ctx.shadowColor = keepColor;
+        ctx.shadowOffsetX = keepX;
+        ctx.shadowOffsetY = keepY;
+      }
       const total = Math.max(1, text.length);
       rows.forEach((row, i) => {
         const rowY = top + i * lineHeight;
@@ -5516,6 +5542,26 @@ If you want to offset all timestamps of a track such that the first one is zero,
           ctx.fill();
           ctx.restore();
         }
+        const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+        if (glow > 0 && entry.active) {
+          const keepBlur = ctx.shadowBlur;
+          const keepColor = ctx.shadowColor;
+          const keepX = ctx.shadowOffsetX;
+          const keepY = ctx.shadowOffsetY;
+          ctx.globalAlpha = 0.75;
+          ctx.fillStyle = cfg.color;
+          ctx.shadowColor = cfg.color;
+          ctx.shadowBlur = entry.size * 0.55 * glow;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+          entry.rows.forEach((row, i) => {
+            ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
+          });
+          ctx.shadowBlur = keepBlur;
+          ctx.shadowColor = keepColor;
+          ctx.shadowOffsetX = keepX;
+          ctx.shadowOffsetY = keepY;
+        }
         ctx.globalAlpha = alpha;
         entry.rows.forEach((row, i) => {
           ctx.fillStyle = cfg.color;
@@ -5532,6 +5578,25 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.fillStyle = pill;
       ctx.fillRect(-width / 2, y - cfg.size * 0.85, width, cfg.size * 1.7);
       ctx.textAlign = "left";
+      const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+      if (glow > 0) {
+        const keepBlur = ctx.shadowBlur;
+        const keepColor = ctx.shadowColor;
+        const keepX = ctx.shadowOffsetX;
+        const keepY = ctx.shadowOffsetY;
+        ctx.fillStyle = cfg.color;
+        ctx.shadowColor = cfg.color;
+        ctx.shadowBlur = cfg.size * 0.55 * glow;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.globalAlpha = 0.75;
+        ctx.fillText(current.text, x, y);
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = keepBlur;
+        ctx.shadowColor = keepColor;
+        ctx.shadowOffsetX = keepX;
+        ctx.shadowOffsetY = keepY;
+      }
       ctx.fillStyle = cfg.color;
       ctx.fillText(current.text, x, y);
     }
@@ -5642,6 +5707,14 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const x = (layer.x - 50) / 100 * dw;
       const y = (layer.y - 50) / 100 * dh;
       ctx.fillText(layer.text, x, y);
+      const glow = Math.max(0, Math.min(1, layer.glow ?? 0));
+      if (glow > 0) {
+        ctx.shadowColor = layer.color;
+        ctx.shadowBlur = size * 0.55 * glow;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillText(layer.text, x, y);
+      }
       ctx.restore();
     }
     drawLyrics(ctx, { cfg: config.lyrics, lines: lyrics, time: t, width: dw, height: dh });
@@ -7561,6 +7634,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
             <div class="field-top"><label>Opacity</label><output>${Math.round(layer.opacity * 100)}%</output></div>
             <input type="range" data-field="opacity" min="10" max="100" step="1" value="${Math.round(layer.opacity * 100)}" />
           </div>
+          <div class="field">
+            <div class="field-top"><label>Glow</label><output>${Math.round((layer.glow ?? 0) * 100)}%</output></div>
+            <input type="range" data-field="glow" min="0" max="100" step="1" value="${Math.round((layer.glow ?? 0) * 100)}" />
+          </div>
         </div>
         <div class="mini-grid">
           <label class="color-field"><span>Colour</span><input type="color" data-field="color" value="${layer.color}" /></label>
@@ -7598,6 +7675,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
       opacity.addEventListener("input", () => {
         $("output", opacity.closest(".field")).textContent = `${opacity.value}%`;
         handlers.update(layer.id, { opacity: Number(opacity.value) / 100 });
+      });
+      const glow = $('[data-field="glow"]', item);
+      glow.addEventListener("input", () => {
+        $("output", glow.closest(".field")).textContent = `${glow.value}%`;
+        handlers.update(layer.id, { glow: Number(glow.value) / 100 });
       });
       const color = $('[data-field="color"]', item);
       color.addEventListener("input", () => {
@@ -7946,6 +8028,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       "#lyricLinesOut": String(config.lyrics.lines),
       "#lyricOffsetOut": `${config.lyrics.offset.toFixed(1)} s`,
       "#lyricPillOpacityOut": `${Math.round(config.lyrics.pillOpacity * 100)}%`,
+      "#lyricGlowOut": `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
       "#primaryHex": config.primary.toUpperCase(),
       "#secondaryHex": config.secondary.toUpperCase()
     };
@@ -7979,6 +8062,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     setRange("#lyricLines", config.lyrics.lines);
     setRange("#lyricOffset", Math.round(config.lyrics.offset * 10));
     setRange("#lyricPillOpacity", Math.round(config.lyrics.pillOpacity * 100));
+    setRange("#lyricGlow", Math.round((config.lyrics.glow ?? 0) * 100));
     setRange("#seekRange", 0);
     const colorInputs = [
       ["#primary", config.primary],
@@ -8946,6 +9030,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
     });
     $("#lyricSections").addEventListener("change", (event) => {
       state.config.lyrics.showSections = event.target.checked;
+      state.version += 1;
+    });
+    $("#lyricGlow").addEventListener("input", (event) => {
+      state.config.lyrics.glow = Number(event.target.value) / 100;
+      const out = document.querySelector("#lyricGlowOut");
+      if (out) out.textContent = `${event.target.value}%`;
       state.version += 1;
     });
     $("#lyricPillOpacity").addEventListener("input", (event) => {

@@ -407,6 +407,29 @@ const typeUnderFx = await page.evaluate(() => {
 const within = (a, b) => a.every((value, index) => Math.abs(value - b[index]) <= 2);
 check(within(typeUnderFx.off, typeUnderFx.on), 'text is not touched by the effect stack', JSON.stringify(typeUnderFx));
 
+// glow is optional and independent for text and lyrics
+const glowProbe = await page.evaluate(() => {
+  const shot = (glow, withText) => {
+    window.songframe.setConfig({
+      preset: 'Minimal',
+      bg: 'solid',
+      particles: 0,
+      text: withText
+        ? [{ id: 'title', text: 'GLOW', x: 50, y: 40, size: 80, color: '#ffffff', font: 'Segoe UI', bold: true, opacity: 1, align: 'center', glow }]
+        : [],
+      lyrics: { ...window.songframe.getState().lyrics, enabled: !withText, glow, size: 54 },
+    });
+    window.songframe.loadLyrics('[00:00.00]glow test line');
+    window.songframe.drawAt(1.2);
+    return document.querySelector('#preview').toDataURL('image/png');
+  };
+  return { textOff: shot(0, true), textOn: shot(0.9, true), lyricOff: shot(0, false), lyricOn: shot(0.9, false) };
+});
+check(glowProbe.textOff !== glowProbe.textOn, 'text glow changes the frame');
+check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
+check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
+await page.evaluate(() => window.songframe.setConfig({ text: [], lyrics: { ...window.songframe.getState().lyrics, enabled: false, glow: 0 } }));
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');

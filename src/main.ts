@@ -332,6 +332,7 @@ function syncChrome(): void {
     '#lyricLinesOut': String(config.lyrics.lines),
     '#lyricOffsetOut': `${config.lyrics.offset.toFixed(1)} s`,
     '#lyricPillOpacityOut': `${Math.round(config.lyrics.pillOpacity * 100)}%`,
+    '#lyricGlowOut': `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
     '#primaryHex': config.primary.toUpperCase(),
     '#secondaryHex': config.secondary.toUpperCase(),
   };
@@ -368,6 +369,7 @@ function syncChrome(): void {
   setRange('#lyricLines', config.lyrics.lines);
   setRange('#lyricOffset', Math.round(config.lyrics.offset * 10));
   setRange('#lyricPillOpacity', Math.round(config.lyrics.pillOpacity * 100));
+  setRange('#lyricGlow', Math.round((config.lyrics.glow ?? 0) * 100));
   setRange('#seekRange', 0);
 
   const colorInputs: [string, string][] = [
@@ -1443,6 +1445,13 @@ function bindEvents(): void {
 
   ui.$('#lyricSections').addEventListener('change', (event) => {
     state.config.lyrics.showSections = (event.target as HTMLInputElement).checked;
+    state.version += 1;
+  });
+
+  ui.$('#lyricGlow').addEventListener('input', (event) => {
+    state.config.lyrics.glow = Number((event.target as HTMLInputElement).value) / 100;
+    const out = document.querySelector('#lyricGlowOut');
+    if (out) out.textContent = `${(event.target as HTMLInputElement).value}%`;
     state.version += 1;
   });
 

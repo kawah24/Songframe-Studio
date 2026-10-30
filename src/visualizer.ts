@@ -145,6 +145,15 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
     const x = ((layer.x - 50) / 100) * dw;
     const y = ((layer.y - 50) / 100) * dh;
     ctx.fillText(layer.text, x, y);
+    const glow = Math.max(0, Math.min(1, layer.glow ?? 0));
+    if (glow > 0) {
+      // Second pass: a coloured halo painted over the drop shadow.
+      ctx.shadowColor = layer.color;
+      ctx.shadowBlur = size * 0.55 * glow;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.fillText(layer.text, x, y);
+    }
     ctx.restore();
   }
 

@@ -241,6 +241,10 @@ export function renderTextList(layers: TextLayer[], activeId: string | null, han
             <div class="field-top"><label>Opacity</label><output>${Math.round(layer.opacity * 100)}%</output></div>
             <input type="range" data-field="opacity" min="10" max="100" step="1" value="${Math.round(layer.opacity * 100)}" />
           </div>
+          <div class="field">
+            <div class="field-top"><label>Glow</label><output>${Math.round((layer.glow ?? 0) * 100)}%</output></div>
+            <input type="range" data-field="glow" min="0" max="100" step="1" value="${Math.round((layer.glow ?? 0) * 100)}" />
+          </div>
         </div>
         <div class="mini-grid">
           <label class="color-field"><span>Colour</span><input type="color" data-field="color" value="${layer.color}" /></label>
@@ -283,6 +287,12 @@ export function renderTextList(layers: TextLayer[], activeId: string | null, han
     opacity.addEventListener('input', () => {
       $('output', opacity.closest('.field') as HTMLElement).textContent = `${opacity.value}%`;
       handlers.update(layer.id, { opacity: Number(opacity.value) / 100 });
+    });
+
+    const glow = $<HTMLInputElement>('[data-field="glow"]', item);
+    glow.addEventListener('input', () => {
+      $('output', glow.closest('.field') as HTMLElement).textContent = `${glow.value}%`;
+      handlers.update(layer.id, { glow: Number(glow.value) / 100 });
     });
 
     const color = $<HTMLInputElement>('[data-field="color"]', item);

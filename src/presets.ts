@@ -130,6 +130,7 @@ export const defaultConfig = (): Config => ({
   lyrics: {
     enabled: false,
     font: 'Segoe UI',
+    glow: 0,
     style: 'karaoke',
     pos: 'bottom',
     size: 46,

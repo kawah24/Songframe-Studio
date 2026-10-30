@@ -52,12 +52,16 @@ export interface TextLayer {
   font: FontId;
   bold: boolean;
   opacity: number;
+  /** Neon halo strength, 0..1. Absent means none. */
+  glow?: number;
   align: Align;
 }
 
 export interface LyricsConfig {
   enabled: boolean;
   font: FontId;
+  /** Neon halo strength, 0..1. */
+  glow: number;
   style: LyricsStyle;
   pos: LyricsPos;
   size: number;

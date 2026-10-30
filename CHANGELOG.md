@@ -141,3 +141,11 @@ stock-photo library.
 - **Drop shadow on type.** Text layers and lyrics use an offset, blurred shadow
   (`0.045em` x, `0.075em` y) instead of a symmetric glow, so they hold up over
   busy footage.
+
+## 1.7.0 — 2026-10-30
+
+- **Glow for text layers and lyrics.** A per-layer *Glow* slider in the Text tab
+  and a *Glow* slider in the Lyrics panel paint a coloured halo behind the glyphs
+  (0.55em blur at full strength) on top of the drop shadow. Off by default, so
+  existing looks render exactly as before. The karaoke sweep glows in the
+  highlight colour, the rest in the lyric colour.
