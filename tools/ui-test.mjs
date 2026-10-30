@@ -331,6 +331,35 @@ await page.click('#btnPlay');
 await page.click('.tab[data-tab="fx"]');
 await page.click('.fx-item[data-key="vignette"] .switch');
 check((await state()).effects.vignette === true, 'effect switch enables the effect');
+check(await page.locator('.fx-item[data-key="zoom"]').count() === 1, 'kick zoom is listed');
+check(await page.locator('.fx-item[data-key="kaleidoscope"]').count() === 1, 'kaleidoscope is listed');
+check(await page.locator('.fx-item[data-key="leak"]').count() === 1, 'light leak is listed');
+
+// the three new effects change the frame, and their intensity matters
+const newFx = await page.evaluate(() => {
+  const keys = ['shake', 'glitch', 'vhs', 'cctv', 'scanlines', 'chromatic', 'bloom', 'grain', 'pixelate', 'strobe', 'vignette', 'hue', 'letterbox', 'zoom', 'kaleidoscope', 'leak'];
+  const render = (fx, amount) => {
+    const effects = {};
+    for (const key of keys) effects[key] = false;
+    if (fx) effects[fx] = true;
+    window.songframe.setConfig({ preset: 'Linear Bars', bg: 'generated', particles: 0, text: [], effects, amounts: { ...window.songframe.getState().amounts, ...(fx ? { [fx]: amount } : {}) } });
+    window.songframe.drawAt(1.5);
+    return document.querySelector('#preview').toDataURL('image/png');
+  };
+  const off = render(null, 0);
+  return {
+    zoom: render('zoom', 1) !== off,
+    kaleidoscope: render('kaleidoscope', 0.8) !== off,
+    leak: render('leak', 1) !== off,
+    zoomAmount: render('zoom', 0.15) !== render('zoom', 1),
+  };
+});
+check(
+  newFx.zoom && newFx.kaleidoscope && newFx.leak,
+  'kick zoom, kaleidoscope and light leak all render',
+  JSON.stringify(newFx),
+);
+check(newFx.zoomAmount, 'kick zoom intensity changes the punch');
 
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');

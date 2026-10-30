@@ -34,7 +34,10 @@ export type EffectKey =
   | 'strobe'
   | 'vignette'
   | 'hue'
-  | 'letterbox';
+  | 'letterbox'
+  | 'zoom'
+  | 'kaleidoscope'
+  | 'leak';
 
 export interface TextLayer {
   id: string;

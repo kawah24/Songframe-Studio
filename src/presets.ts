@@ -44,6 +44,9 @@ export const EFFECTS: { key: EffectKey; label: string; hint: string }[] = [
   { key: 'vignette', label: 'Vignette', hint: 'Darkened corners' },
   { key: 'hue', label: 'Hue shift', hint: 'Rotating colour wheel' },
   { key: 'letterbox', label: 'Letterbox', hint: 'Cinematic black bars' },
+  { key: 'zoom', label: 'Kick zoom', hint: 'Frame punches in on bass hits' },
+  { key: 'kaleidoscope', label: 'Kaleidoscope', hint: 'Mirrored symmetry' },
+  { key: 'leak', label: 'Light leak', hint: 'Warm flare washed across the frame' },
 ];
 
 export const ASPECTS: { id: Config['aspect']; w: number; h: number; label: string }[] = [
@@ -70,10 +73,16 @@ const effectDefaults: Record<EffectKey, boolean> = {
   vignette: false,
   hue: false,
   letterbox: false,
+  zoom: false,
+  kaleidoscope: false,
+  leak: false,
 };
 
 const amountDefaults: Record<EffectKey, number> = {
   shake: 0.25,
+  zoom: 0.5,
+  kaleidoscope: 0.4,
+  leak: 0.45,
   glitch: 0.3,
   vhs: 0.5,
   cctv: 0.8,

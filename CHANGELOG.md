@@ -122,3 +122,13 @@ stock-photo library.
   open aperture, palette-driven hue) are gone, and with them the `hexToHsl`
   helper. The preset keeps its own spectrum, so primary/secondary do not change
   it — that is what the original did.
+
+## 1.5.0 — 2026-10-30
+
+- **Kick zoom.** The frame punches in on bass hits, up to +16% at full intensity.
+- **Kaleidoscope.** Mirrors the frame horizontally; above 50% intensity it mirrors
+  vertically too, for four-way symmetry.
+- **Light leak.** A warm orange-to-pink flare washed over the picture with the
+  track's energy.
+- All three sit in the Effects tab with their own intensity slider, and all three
+  are deterministic — no random values, so preview and export agree.

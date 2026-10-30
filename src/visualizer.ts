@@ -1003,6 +1003,56 @@ function applyEffects(
     ctx.filter = 'none';
   }
 
+  if (effects.kaleidoscope) {
+    const half = Math.floor(width / 2);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(half, 0, width - half, height);
+    ctx.clip();
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(ctx.canvas, 0, 0);
+    ctx.restore();
+    if (amounts.kaleidoscope > 0.5) {
+      const halfH = Math.floor(height / 2);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, halfH, width, height - halfH);
+      ctx.clip();
+      ctx.translate(0, height);
+      ctx.scale(1, -1);
+      ctx.drawImage(ctx.canvas, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  if (effects.zoom) {
+    // Punch in on bass. Scaling up never leaves a gap at the edge.
+    const punch = 1 + frame.bass * amounts.zoom * 0.16;
+    if (punch > 1.002) {
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      ctx.scale(punch, punch);
+      ctx.drawImage(ctx.canvas, -width / 2, -height / 2);
+      ctx.restore();
+    }
+  }
+
+  if (effects.leak) {
+    const strength = amounts.leak * (0.1 + frame.energy * 0.6);
+    if (strength > 0.004) {
+      const flare = ctx.createLinearGradient(0, 0, width, height);
+      flare.addColorStop(0, `rgba(255,168,84,${(strength * 0.85).toFixed(3)})`);
+      flare.addColorStop(0.42, `rgba(255,86,132,${(strength * 0.45).toFixed(3)})`);
+      flare.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = flare;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+  }
+
   if (effects.letterbox) {
     const bar = height * 0.11 * amounts.letterbox;
     ctx.fillStyle = '#000000';
