@@ -684,18 +684,14 @@ function drawHalo(
   const wellSquash = 0.58;
   const count = Math.max(60, Math.min(300, Math.round(config.bars * 3)));
   const barMax = size * 0.3;
-  // The ring is painted from the palette: the hue sweeps from the primary to
-  // the secondary colour and back around the circle.
+  // The bars run through the full spectrum, anchored at the primary hue so the
+  // palette still turns the wheel; the secondary tints the floor fan.
   const warm = hexToHsl(config.primary);
   const cool = hexToHsl(config.secondary);
-  const hueSpan = ((cool.h - warm.h + 540) % 360) - 180;
-  const colourAt = (fraction: number): { h: number; s: number; l: number } => {
-    const t = 1 - Math.abs(2 * fraction - 1);
-    return {
-      h: (warm.h + hueSpan * t + 360) % 360,
-      s: warm.s + (cool.s - warm.s) * t,
-      l: warm.l + (cool.l - warm.l) * t,
-    };
+  const hueAt = (fraction: number): number => (warm.h + 720 * fraction) % 360;
+  const blend = (a: number, b: number, t: number): number => {
+    const delta = ((b - a + 540) % 360) - 180;
+    return (a + delta * t + 360) % 360;
   };
 
   // The disc the ring stands on: a soft sheen inside, sunburst outside.
@@ -716,9 +712,8 @@ function drawHalo(
   ctx.lineWidth = 1;
   for (let i = 0; i < rays; i++) {
     const angle = (i / rays) * Math.PI * 2;
-    const ray = colourAt(i / rays);
-    const rayHue = ray.h.toFixed(0);
-    const raySat = Math.min(ray.s, 62).toFixed(0);
+    const rayHue = blend(hueAt(i / rays), cool.h, 0.4).toFixed(0);
+    const raySat = Math.max(46, Math.min(cool.s, 78)).toFixed(0);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
@@ -731,7 +726,7 @@ function drawHalo(
     ctx.stroke();
 
     const outerEnd = radius * (1.62 + 0.34 * Math.sin(i * 1.7));
-    ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(24, ray.s).toFixed(0)}%, 90%, ${(base * 0.24).toFixed(3)})`;
+    ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(38, cool.s).toFixed(0)}%, 88%, ${(base * 0.26).toFixed(3)})`;
     ctx.beginPath();
     ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * raySquash);
     ctx.lineTo(cos * outerEnd, sin * outerEnd * raySquash);
@@ -779,10 +774,9 @@ function drawHalo(
     const height = 5 + Math.pow(value, 1.12) * barMax;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius * squash;
-    const bar = colourAt(entry.index / count);
-    const hue = bar.h.toFixed(0);
-    const barSat = Math.max(bar.s, 58).toFixed(0);
-    const barLum = Math.min(80, Math.max(54, bar.l + 10)).toFixed(0);
+    const hue = hueAt(entry.index / count).toFixed(0);
+    const barSat = '94';
+    const barLum = '60';
     // The far side sits slightly darker, which is what sells the tilt.
     const depth = 0.62 + 0.38 * ((entry.depth + 1) / 2);
 

@@ -107,3 +107,9 @@ stock-photo library.
   more, so the ring reads as an aperture instead of a closed drum; the near edge
   is drawn as a thin rim and the floor fan sits under it. A shadow left over from
   the text pass no longer blurs the ring into a grey saucer.
+
+## 1.3.1 — 2026-10-30
+
+- **Halo is a full spectrum again.** The ring runs through every hue twice (so
+  the visible back arc carries the whole wheel), anchored at the primary colour;
+  the secondary tints the floor fan. Two-tone palettes no longer flatten it.

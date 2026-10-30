@@ -6102,14 +6102,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const barMax = size * 0.3;
     const warm = hexToHsl(config.primary);
     const cool = hexToHsl(config.secondary);
-    const hueSpan = (cool.h - warm.h + 540) % 360 - 180;
-    const colourAt = (fraction) => {
-      const t = 1 - Math.abs(2 * fraction - 1);
-      return {
-        h: (warm.h + hueSpan * t + 360) % 360,
-        s: warm.s + (cool.s - warm.s) * t,
-        l: warm.l + (cool.l - warm.l) * t
-      };
+    const hueAt = (fraction) => (warm.h + 720 * fraction) % 360;
+    const blend = (a, b, t) => {
+      const delta = (b - a + 540) % 360 - 180;
+      return (a + delta * t + 360) % 360;
     };
     ctx.save();
     ctx.scale(1, raySquash);
@@ -6126,9 +6122,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     ctx.lineWidth = 1;
     for (let i = 0; i < rays; i++) {
       const angle = i / rays * Math.PI * 2;
-      const ray = colourAt(i / rays);
-      const rayHue = ray.h.toFixed(0);
-      const raySat = Math.min(ray.s, 62).toFixed(0);
+      const rayHue = blend(hueAt(i / rays), cool.h, 0.4).toFixed(0);
+      const raySat = Math.max(46, Math.min(cool.s, 78)).toFixed(0);
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       const innerStart = radius * 0.42;
@@ -6139,7 +6134,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.lineTo(cos * innerEnd, sin * innerEnd * raySquash);
       ctx.stroke();
       const outerEnd = radius * (1.62 + 0.34 * Math.sin(i * 1.7));
-      ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(24, ray.s).toFixed(0)}%, 90%, ${(base * 0.24).toFixed(3)})`;
+      ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(38, cool.s).toFixed(0)}%, 88%, ${(base * 0.26).toFixed(3)})`;
       ctx.beginPath();
       ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * raySquash);
       ctx.lineTo(cos * outerEnd, sin * outerEnd * raySquash);
@@ -6179,10 +6174,9 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const height = 5 + Math.pow(value, 1.12) * barMax;
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius * squash;
-      const bar = colourAt(entry.index / count);
-      const hue = bar.h.toFixed(0);
-      const barSat = Math.max(bar.s, 58).toFixed(0);
-      const barLum = Math.min(80, Math.max(54, bar.l + 10)).toFixed(0);
+      const hue = hueAt(entry.index / count).toFixed(0);
+      const barSat = "94";
+      const barLum = "60";
       const depth = 0.62 + 0.38 * ((entry.depth + 1) / 2);
       ctx.strokeStyle = `hsl(${hue}, ${barSat}%, ${barLum}%)`;
       ctx.globalAlpha = base * depth * 0.3;
