@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 APP_NAME = "Songframe Studio"
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.3.0"
 WINDOW_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 VIDEO_TYPES = ("Video file (*.mp4;*.webm)", "All files (*.*)")

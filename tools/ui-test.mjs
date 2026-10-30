@@ -164,6 +164,39 @@ check(
 );
 check(lyricsState.enabled === true, 'the reset keeps the loaded lyrics');
 
+// a line that cannot fit must wrap instead of running off the frame
+const lyricFit = await page.evaluate(() => {
+  window.songframe.setConfig({
+    preset: 'Minimal',
+    aspect: '9:16',
+    bg: 'none',
+    text: [],
+    lyrics: { ...window.songframe.getState().lyrics, enabled: true, size: 96 },
+  });
+  window.songframe.loadLyrics("[00:00.00]'s Uhr bleibt stehn, d'Zeit geht langsam");
+  window.songframe.drawAt(1.4);
+  const canvas = document.querySelector('#preview');
+  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  let edge = 0;
+  let lit = 0;
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const i = (y * canvas.width + x) * 4;
+      const sum = data[i] + data[i + 1] + data[i + 2];
+      if (sum > 420) {
+        lit += 1;
+        if (x < 3 || x > canvas.width - 4) edge += 1;
+      }
+    }
+  }
+  return { edge, lit, width: canvas.width };
+});
+check(lyricFit.lit > 50, 'the long lyric line is drawn', `${lyricFit.lit} lit pixels`);
+check(lyricFit.edge === 0, 'a long lyric line never reaches the frame edge', `${lyricFit.edge} edge pixels at ${lyricFit.width}px`);
+await page.evaluate(() => {
+  window.songframe.setConfig({ preset: 'NCS Circle', aspect: '16:9', bg: 'generated', text: [], lyrics: { ...window.songframe.getState().lyrics, enabled: false, size: 46 } });
+});
+
 await page.click('#btnLyricsClear');
 await page.waitForTimeout(250);
 const lyricsCleared = await page.evaluate(() => ({

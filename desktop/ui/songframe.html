@@ -5389,15 +5389,60 @@ If you want to offset all timestamps of a track such that the first one is zero,
     }
     const current = lines[index];
     const nextTime = current.end && current.end > current.time ? current.end : index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
-    const fontSize = cfg.size;
     const y = cfg.pos === "bottom" ? height * 0.5 - height * 0.115 : cfg.pos === "top" ? -height * 0.5 + height * 0.115 : 0;
     const pill = rgba(cfg.pill, cfg.pillOpacity);
+    const family = fontFamily(cfg.font);
+    const maxWidth = width * 0.88;
+    const layout = (text, requested) => {
+      let size = Math.max(8, requested);
+      let rows = [];
+      let widest = 0;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        ctx.font = `700 ${size}px ${family}`;
+        const words = [];
+        const scan = /\S+/g;
+        let hit = scan.exec(text);
+        while (hit) {
+          words.push({ text: hit[0], start: hit.index });
+          hit = scan.exec(text);
+        }
+        rows = [];
+        let rowText = "";
+        let rowStart = 0;
+        let rowEnd = 0;
+        widest = 0;
+        for (const word of words) {
+          const candidate = rowText ? `${rowText} ${word.text}` : word.text;
+          const measure2 = ctx.measureText(candidate).width;
+          if (rowText && measure2 > maxWidth) {
+            rows.push({ text: rowText, start: rowStart, end: rowEnd });
+            widest = Math.max(widest, ctx.measureText(rowText).width);
+            rowText = word.text;
+            rowStart = word.start;
+          } else if (!rowText) {
+            rowStart = word.start;
+            rowText = candidate;
+          } else {
+            rowText = candidate;
+          }
+          rowEnd = word.start + word.text.length;
+        }
+        if (rowText) {
+          rows.push({ text: rowText, start: rowStart, end: rowEnd });
+          widest = Math.max(widest, ctx.measureText(rowText).width);
+        }
+        if (widest <= maxWidth || size <= 9) break;
+        size = Math.max(9, size * (maxWidth / widest) * 0.98);
+      }
+      ctx.font = `700 ${size}px ${family}`;
+      return { rows, size, widest };
+    };
     ctx.save();
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    ctx.font = `700 ${fontSize}px ${fontFamily(cfg.font)}`;
+    ctx.font = `700 ${cfg.size}px ${family}`;
     ctx.shadowColor = "rgba(0,0,0,0.65)";
-    ctx.shadowBlur = fontSize * 0.35;
+    ctx.shadowBlur = cfg.size * 0.35;
     ctx.fillStyle = cfg.color;
     const progress = lineProgress(current, t, nextTime, 5);
     if (cfg.style === "karaoke") {
@@ -5406,58 +5451,75 @@ If you want to offset all timestamps of a track such that the first one is zero,
         ctx.restore();
         return;
       }
-      const metrics = ctx.measureText(text);
-      const pillWidth = metrics.width + fontSize * 1.1;
-      const pillHeight = fontSize * 1.5;
+      const { rows, size } = layout(text, cfg.size);
+      const lineHeight = size * 1.26;
+      const blockHeight = rows.length * lineHeight;
+      const top = y - blockHeight / 2 + lineHeight / 2;
+      const pillWidth = Math.min(width, rows.reduce((w, row) => Math.max(w, ctx.measureText(row.text).width), 0)) + size * 1.05;
+      const pillHeight = blockHeight + size * 0.55;
       ctx.fillStyle = pill;
       ctx.beginPath();
-      ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
+      ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, Math.min(pillHeight, size * 1.5) / 2);
       ctx.fill();
-      ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.fillStyle = cfg.color;
-      ctx.fillText(text, 0, y);
-      ctx.restore();
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(-metrics.width / 2, y - pillHeight / 2, metrics.width * Math.max(1e-3, progress), pillHeight);
-      ctx.clip();
-      ctx.fillStyle = cfg.highlight;
-      ctx.fillText(text, 0, y);
-      ctx.restore();
+      const total = Math.max(1, text.length);
+      rows.forEach((row, i) => {
+        const rowY = top + i * lineHeight;
+        const rowWidth = ctx.measureText(row.text).width;
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = cfg.color;
+        ctx.fillText(row.text, 0, rowY);
+        ctx.globalAlpha = 1;
+        const span = Math.max(1, row.end - row.start);
+        const fraction = Math.min(1, Math.max(0, (progress * total - row.start) / span));
+        if (fraction > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(-rowWidth / 2, rowY - lineHeight / 2, rowWidth * fraction, lineHeight);
+          ctx.clip();
+          ctx.fillStyle = cfg.highlight;
+          ctx.fillText(row.text, 0, rowY);
+          ctx.restore();
+        }
+      });
     } else if (cfg.style === "lines") {
-      const visible = [];
-      for (let i = index; i < lines.length && visible.length < cfg.lines; i++) {
+      const entries = [];
+      for (let i = index; i < lines.length && entries.length < cfg.lines; i++) {
         if (!cfg.showSections && lines[i].isSection) continue;
-        visible.push({ text: lines[i].text, active: i === index });
+        const laid = layout(lines[i].text, cfg.size);
+        entries.push({ rows: laid.rows, size: laid.size, active: i === index });
       }
-      const lineHeight = fontSize * 1.55;
-      const top = y - (visible.length - 1) * lineHeight / 2;
-      visible.forEach((entry, i) => {
+      const gap = cfg.size * 0.42;
+      const totalHeight = entries.reduce((sum, entry) => sum + entry.rows.length * entry.size * 1.24, 0) + gap * (entries.length - 1);
+      let cursor = y - totalHeight / 2;
+      for (const entry of entries) {
+        const lineHeight = entry.size * 1.24;
+        const blockHeight = entry.rows.length * lineHeight;
         const alpha = entry.active ? 1 : 0.42;
-        const metrics = ctx.measureText(entry.text);
         if (entry.active) {
-          const pillWidth = metrics.width + fontSize;
-          const pillHeight = fontSize * 1.42;
+          const widest = entry.rows.reduce((w, row) => Math.max(w, ctx.measureText(row.text).width), 0);
           ctx.save();
           ctx.globalAlpha = 1;
           ctx.fillStyle = pill;
           ctx.beginPath();
-          ctx.roundRect(-pillWidth / 2, top + i * lineHeight - pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
+          ctx.roundRect(-Math.min(width, widest + entry.size) / 2, cursor - lineHeight * 0.14, Math.min(width, widest + entry.size), blockHeight + lineHeight * 0.28, entry.size * 0.7);
           ctx.fill();
           ctx.restore();
         }
         ctx.globalAlpha = alpha;
-        ctx.fillStyle = cfg.color;
-        ctx.fillText(entry.text, 0, top + i * lineHeight);
+        entry.rows.forEach((row, i) => {
+          ctx.fillStyle = cfg.color;
+          ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
+        });
         ctx.globalAlpha = 1;
-      });
+        cursor += blockHeight + gap;
+      }
     } else {
+      ctx.font = `700 ${cfg.size}px ${family}`;
       const metrics = ctx.measureText(current.text);
       const travel = width + metrics.width;
       const x = width * 0.5 - progress * travel;
       ctx.fillStyle = pill;
-      ctx.fillRect(-width / 2, y - fontSize * 0.85, width, fontSize * 1.7);
+      ctx.fillRect(-width / 2, y - cfg.size * 0.85, width, cfg.size * 1.7);
       ctx.textAlign = "left";
       ctx.fillStyle = cfg.color;
       ctx.fillText(current.text, x, y);
@@ -6027,11 +6089,17 @@ If you want to offset all timestamps of a track such that the first one is zero,
   }
   function drawHalo(ctx, frame, config, dw, dh) {
     const base = ctx.globalAlpha;
+    const shadowBlur = ctx.shadowBlur;
+    const shadowColor = ctx.shadowColor;
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
     const size = Math.min(dw, dh);
     const radius = size * 0.36;
-    const squash = 0.42;
-    const count = Math.max(48, Math.min(240, Math.round(config.bars * 2)));
-    const barMax = size * 0.32;
+    const squash = 0.24;
+    const raySquash = 0.5;
+    const wellSquash = 0.58;
+    const count = Math.max(60, Math.min(300, Math.round(config.bars * 3)));
+    const barMax = size * 0.3;
     const warm = hexToHsl(config.primary);
     const cool = hexToHsl(config.secondary);
     const hueSpan = (cool.h - warm.h + 540) % 360 - 180;
@@ -6044,11 +6112,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
       };
     };
     ctx.save();
-    ctx.scale(1, squash);
+    ctx.scale(1, raySquash);
     const floor = ctx.createRadialGradient(0, 0, radius * 0.12, 0, 0, radius * 1.02);
-    floor.addColorStop(0, "rgba(0,0,0,0)");
-    floor.addColorStop(0.72, "rgba(0,0,0,0)");
-    floor.addColorStop(1, "rgba(255,255,255,0.05)");
+    floor.addColorStop(0, "rgba(255,255,255,0.05)");
+    floor.addColorStop(0.5, "rgba(255,255,255,0.02)");
+    floor.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = floor;
     ctx.beginPath();
     ctx.arc(0, 0, radius * 1.02, 0, Math.PI * 2);
@@ -6067,34 +6135,44 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const innerEnd = radius * 0.99;
       ctx.strokeStyle = `hsla(${rayHue}, ${raySat}%, 70%, ${(base * 0.07).toFixed(3)})`;
       ctx.beginPath();
-      ctx.moveTo(cos * innerStart, sin * innerStart * squash);
-      ctx.lineTo(cos * innerEnd, sin * innerEnd * squash);
+      ctx.moveTo(cos * innerStart, sin * innerStart * raySquash);
+      ctx.lineTo(cos * innerEnd, sin * innerEnd * raySquash);
       ctx.stroke();
-      const outerEnd = radius * (1.44 + 0.3 * Math.sin(i * 1.7));
-      ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(24, ray.s).toFixed(0)}%, 90%, ${(base * 0.27).toFixed(3)})`;
+      const outerEnd = radius * (1.62 + 0.34 * Math.sin(i * 1.7));
+      ctx.strokeStyle = `hsla(${rayHue}, ${Math.min(24, ray.s).toFixed(0)}%, 90%, ${(base * 0.24).toFixed(3)})`;
       ctx.beginPath();
-      ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * squash);
-      ctx.lineTo(cos * outerEnd, sin * outerEnd * squash);
+      ctx.moveTo(cos * radius * 1.03, sin * radius * 1.03 * raySquash);
+      ctx.lineTo(cos * outerEnd, sin * outerEnd * raySquash);
       ctx.stroke();
     }
     ctx.save();
-    ctx.scale(1, squash);
-    const well = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.44);
+    ctx.scale(1, wellSquash);
+    const well = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.4);
     well.addColorStop(0, "rgba(0,0,0,1)");
-    well.addColorStop(0.66, "rgba(0,0,0,1)");
-    well.addColorStop(0.86, "rgba(0,0,0,0.72)");
+    well.addColorStop(0.7, "rgba(0,0,0,1)");
+    well.addColorStop(0.88, "rgba(0,0,0,0.75)");
     well.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = well;
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.44, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     const order = [];
     for (let i = 0; i < count; i++) {
       const angle = i / count * Math.PI * 2;
-      order.push({ index: i, depth: Math.sin(angle) });
+      const depth = Math.sin(angle);
+      if (depth > 0.02) continue;
+      order.push({ index: i, depth });
     }
     order.sort((a, b) => a.depth - b.depth);
+    ctx.save();
+    ctx.scale(1, squash);
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = `rgba(255,255,255,${(base * 0.3).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
     for (const entry of order) {
       const angle = entry.index / count * Math.PI * 2;
       const value = bandAt(frame.bands, entry.index, count);
@@ -6125,6 +6203,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     }
     ctx.globalAlpha = base;
     ctx.lineWidth = 1;
+    ctx.shadowBlur = shadowBlur;
+    ctx.shadowColor = shadowColor;
   }
   function drawParticles(ctx, frame, config, dw, dh) {
     const base = ctx.globalAlpha;

@@ -96,3 +96,14 @@ stock-photo library.
   primary and secondary had no effect on it. The hue now sweeps from the primary
   colour to the secondary and back around the circle, and the sunburst picks up
   the same tint.
+
+## 1.3.0 — 2026-10-30
+
+- **Long lyric lines now fit.** A line wider than 88% of the frame is wrapped at
+  a word boundary onto extra rows, and only a single word that still cannot fit
+  shrinks the type. The karaoke sweep runs across the wrap, and the pill follows
+  the block.
+- **Halo opens towards the viewer.** The near half of the rim carries no bars any
+  more, so the ring reads as an aperture instead of a closed drum; the near edge
+  is drawn as a thin rim and the floor fan sits under it. A shadow left over from
+  the text pass no longer blurs the ring into a grey saucer.

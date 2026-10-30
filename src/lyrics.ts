@@ -206,6 +206,12 @@ interface DrawOptions {
 }
 
 /** Draws the synced lyric overlay in 1080-space with the origin at the centre. */
+interface LyricRow {
+  text: string;
+  start: number;
+  end: number;
+}
+
 export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): void {
   const { cfg, lines, width, height } = opts;
   if (!cfg.enabled || lines.length === 0) return;
@@ -228,16 +234,65 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       : index + 1 < lines.length
         ? lines[index + 1].time
         : current.time + 6;
-  const fontSize = cfg.size;
   const y = cfg.pos === 'bottom' ? height * 0.5 - height * 0.115 : cfg.pos === 'top' ? -height * 0.5 + height * 0.115 : 0;
   const pill = rgba(cfg.pill, cfg.pillOpacity);
+  const family = fontFamily(cfg.font);
+  const maxWidth = width * 0.88;
+
+  // Words wrap onto new rows, and only a single word that still cannot fit
+  // shrinks the type. Rows carry their character range so the karaoke sweep
+  // keeps running across the wrap.
+  const layout = (text: string, requested: number): { rows: LyricRow[]; size: number; widest: number } => {
+    let size = Math.max(8, requested);
+    let rows: LyricRow[] = [];
+    let widest = 0;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      ctx.font = `700 ${size}px ${family}`;
+      const words: { text: string; start: number }[] = [];
+      const scan = /\S+/g;
+      let hit = scan.exec(text);
+      while (hit) {
+        words.push({ text: hit[0], start: hit.index });
+        hit = scan.exec(text);
+      }
+      rows = [];
+      let rowText = '';
+      let rowStart = 0;
+      let rowEnd = 0;
+      widest = 0;
+      for (const word of words) {
+        const candidate = rowText ? `${rowText} ${word.text}` : word.text;
+        const measure = ctx.measureText(candidate).width;
+        if (rowText && measure > maxWidth) {
+          rows.push({ text: rowText, start: rowStart, end: rowEnd });
+          widest = Math.max(widest, ctx.measureText(rowText).width);
+          rowText = word.text;
+          rowStart = word.start;
+        } else if (!rowText) {
+          rowStart = word.start;
+          rowText = candidate;
+        } else {
+          rowText = candidate;
+        }
+        rowEnd = word.start + word.text.length;
+      }
+      if (rowText) {
+        rows.push({ text: rowText, start: rowStart, end: rowEnd });
+        widest = Math.max(widest, ctx.measureText(rowText).width);
+      }
+      if (widest <= maxWidth || size <= 9) break;
+      size = Math.max(9, size * (maxWidth / widest) * 0.98);
+    }
+    ctx.font = `700 ${size}px ${family}`;
+    return { rows, size, widest };
+  };
 
   ctx.save();
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
-  ctx.font = `700 ${fontSize}px ${fontFamily(cfg.font)}`;
+  ctx.font = `700 ${cfg.size}px ${family}`;
   ctx.shadowColor = 'rgba(0,0,0,0.65)';
-  ctx.shadowBlur = fontSize * 0.35;
+  ctx.shadowBlur = cfg.size * 0.35;
   ctx.fillStyle = cfg.color;
 
   const progress = lineProgress(current, t, nextTime, 5);
@@ -248,60 +303,77 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       ctx.restore();
       return;
     }
-    const metrics = ctx.measureText(text);
-    const pillWidth = metrics.width + fontSize * 1.1;
-    const pillHeight = fontSize * 1.5;
+    const { rows, size } = layout(text, cfg.size);
+    const lineHeight = size * 1.26;
+    const blockHeight = rows.length * lineHeight;
+    const top = y - blockHeight / 2 + lineHeight / 2;
+    const pillWidth = Math.min(width, rows.reduce((w, row) => Math.max(w, ctx.measureText(row.text).width), 0)) + size * 1.05;
+    const pillHeight = blockHeight + size * 0.55;
+
     ctx.fillStyle = pill;
     ctx.beginPath();
-    ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
+    ctx.roundRect(-pillWidth / 2, y - pillHeight / 2, pillWidth, pillHeight, Math.min(pillHeight, size * 1.5) / 2);
     ctx.fill();
 
-    ctx.save();
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle = cfg.color;
-    ctx.fillText(text, 0, y);
-    ctx.restore();
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(-metrics.width / 2, y - pillHeight / 2, metrics.width * Math.max(0.001, progress), pillHeight);
-    ctx.clip();
-    ctx.fillStyle = cfg.highlight;
-    ctx.fillText(text, 0, y);
-    ctx.restore();
+    const total = Math.max(1, text.length);
+    rows.forEach((row, i) => {
+      const rowY = top + i * lineHeight;
+      const rowWidth = ctx.measureText(row.text).width;
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = cfg.color;
+      ctx.fillText(row.text, 0, rowY);
+      ctx.globalAlpha = 1;
+      const span = Math.max(1, row.end - row.start);
+      const fraction = Math.min(1, Math.max(0, (progress * total - row.start) / span));
+      if (fraction > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-rowWidth / 2, rowY - lineHeight / 2, rowWidth * fraction, lineHeight);
+        ctx.clip();
+        ctx.fillStyle = cfg.highlight;
+        ctx.fillText(row.text, 0, rowY);
+        ctx.restore();
+      }
+    });
   } else if (cfg.style === 'lines') {
-    const visible: { text: string; active: boolean }[] = [];
-    for (let i = index; i < lines.length && visible.length < cfg.lines; i++) {
+    const entries: { rows: LyricRow[]; size: number; active: boolean }[] = [];
+    for (let i = index; i < lines.length && entries.length < cfg.lines; i++) {
       if (!cfg.showSections && lines[i].isSection) continue;
-      visible.push({ text: lines[i].text, active: i === index });
+      const laid = layout(lines[i].text, cfg.size);
+      entries.push({ rows: laid.rows, size: laid.size, active: i === index });
     }
-    const lineHeight = fontSize * 1.55;
-    const top = y - ((visible.length - 1) * lineHeight) / 2;
-    visible.forEach((entry, i) => {
+    const gap = cfg.size * 0.42;
+    const totalHeight = entries.reduce((sum, entry) => sum + entry.rows.length * entry.size * 1.24, 0) + gap * (entries.length - 1);
+    let cursor = y - totalHeight / 2;
+    for (const entry of entries) {
+      const lineHeight = entry.size * 1.24;
+      const blockHeight = entry.rows.length * lineHeight;
       const alpha = entry.active ? 1 : 0.42;
-      const metrics = ctx.measureText(entry.text);
       if (entry.active) {
-        const pillWidth = metrics.width + fontSize;
-        const pillHeight = fontSize * 1.42;
+        const widest = entry.rows.reduce((w, row) => Math.max(w, ctx.measureText(row.text).width), 0);
         ctx.save();
         ctx.globalAlpha = 1;
         ctx.fillStyle = pill;
         ctx.beginPath();
-        ctx.roundRect(-pillWidth / 2, top + i * lineHeight - pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
+        ctx.roundRect(-Math.min(width, widest + entry.size) / 2, cursor - lineHeight * 0.14, Math.min(width, widest + entry.size), blockHeight + lineHeight * 0.28, entry.size * 0.7);
         ctx.fill();
         ctx.restore();
       }
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = cfg.color;
-      ctx.fillText(entry.text, 0, top + i * lineHeight);
+      entry.rows.forEach((row, i) => {
+        ctx.fillStyle = cfg.color;
+        ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
+      });
       ctx.globalAlpha = 1;
-    });
+      cursor += blockHeight + gap;
+    }
   } else {
+    ctx.font = `700 ${cfg.size}px ${family}`;
     const metrics = ctx.measureText(current.text);
     const travel = width + metrics.width;
     const x = width * 0.5 - progress * travel;
     ctx.fillStyle = pill;
-    ctx.fillRect(-width / 2, y - fontSize * 0.85, width, fontSize * 1.7);
+    ctx.fillRect(-width / 2, y - cfg.size * 0.85, width, cfg.size * 1.7);
     ctx.textAlign = 'left';
     ctx.fillStyle = cfg.color;
     ctx.fillText(current.text, x, y);
