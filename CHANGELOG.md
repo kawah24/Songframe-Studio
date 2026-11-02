@@ -197,3 +197,15 @@ stock-photo library.
   the same weight so wrapped lines stay correct.
 - Saved looks from older versions still render bold, since an absent field means
   bold — the historical look is unchanged.
+
+## 1.7.6 — 2026-11-02
+
+- **"Clean" is actually clean now.** The Minimal preset drew two things it never
+  advertised: a waveform hairline 5.5 % above the bottom edge and a full-width
+  progress bar 2 % above it. With a video background those read as a stray wave
+  under the picture. Both are gone; the preset now draws nothing at all, and
+  particles, backdrop and type carry the frame on their own.
+- Tests: *clean preset draws nothing but the backdrop* (a solid-background frame
+  must be a single colour) and *clean preset still draws particles*. The opacity
+  sweep now lists only presets that draw something, since an empty preset cannot
+  respond to opacity.

@@ -238,7 +238,7 @@ check(Math.abs((await state()).sensitivity - 1.7) < 0.02, 'sensitivity updates t
 check(hot !== barsFew, 'sensitivity changes the frame');
 
 // opacity must reach every preset, not just the ones that leave alpha alone
-const everyPreset = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Minimal', 'Waveform', 'Vinyl', 'Lyrics', 'Halo'];
+const everyPreset = ['NCS Circle', 'Linear Bars', 'Dual Mirror', 'Center Wave', 'Orbital', 'Hexagon', 'Oscilloscope', 'Digital Rain', 'Shockwave', 'Waveform', 'Vinyl', 'Lyrics', 'Halo'];
 const deaf = [];
 for (const name of everyPreset) {
   const differs = await page.evaluate((preset) => {
@@ -253,7 +253,7 @@ for (const name of everyPreset) {
   }, name);
   if (!differs) deaf.push(name);
 }
-check(deaf.length === 0, 'opacity affects every preset', deaf.length ? deaf.join(', ') : 'all 13 respond');
+check(deaf.length === 0, 'opacity affects every preset', deaf.length ? deaf.join(', ') : `${everyPreset.length} respond`);
 await page.evaluate(() => window.songframe.setConfig({ visualizerOpacity: 1, particles: 50, bg: 'generated' }));
 
 // the halo ring keeps its own spectrum, whatever the palette says
@@ -567,6 +567,33 @@ check(
   'lyrics have a bold switch that lightens the type',
   JSON.stringify(boldToggle),
 );
+
+// "Clean" must really be clean: no wave line, no progress bar
+const cleanPreset = await page.evaluate(() => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const shot = (particles) => {
+    window.songframe.setConfig({
+      preset: 'Minimal',
+      bg: 'solid',
+      particles,
+      text: [],
+      lyrics: { ...window.songframe.getState().lyrics, enabled: false },
+      effects: {},
+    });
+    window.songframe.drawAt(4);
+    const { width: w, height: h } = canvas;
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += 4) {
+      seen.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+    }
+    return seen.size;
+  };
+  return { off: shot(0), on: shot(60) };
+});
+check(cleanPreset.off === 1, 'clean preset draws nothing but the backdrop', JSON.stringify(cleanPreset));
+check(cleanPreset.on > 20, 'clean preset still draws particles', JSON.stringify(cleanPreset));
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 

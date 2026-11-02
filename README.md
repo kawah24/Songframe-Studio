@@ -55,7 +55,7 @@ Double-click that file. It is one self-contained HTML document (about 235 KB) wi
 | Analog | oscilloscope waveform |
 | Matrix | falling glyph columns |
 | Pulse | rings that fire out of a glowing core |
-| Clean | type and backdrop only, with a waveform hairline |
+| Clean | type, backdrop and particles only - no visualizer at all |
 | Waveform | the whole track's waveform, played part bright, with a playhead |
 | Vinyl | spinning record with the cover as its label and a progress ring |
 | Lyrics | type-only layout for lyric videos, with a bass-reactive glow |

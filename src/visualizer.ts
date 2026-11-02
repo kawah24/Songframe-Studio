@@ -96,7 +96,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
       drawShockwave(ctx, frame, config);
       break;
     case 'Minimal':
-      drawMinimal(ctx, frame, config, dw, dh, duration);
+      // Clean draws no visualizer at all: backdrop, particles and type only.
       break;
     case 'Waveform':
       drawWaveform(ctx, frame, config, dw, dh, peaks, duration);
@@ -470,30 +470,6 @@ function drawShockwave(ctx: CanvasRenderingContext2D, frame: Frame, config: Conf
   ctx.fill();
   ctx.globalAlpha = base;
   ctx.shadowBlur = 0;
-  ctx.restore();
-}
-
-function drawMinimal(ctx: CanvasRenderingContext2D, frame: Frame, config: Config, dw: number, dh: number, duration: number): void {
-  const width = dw * 0.9;
-  const baseY = dh / 2 - dh * 0.055;
-  ctx.save();
-  ctx.strokeStyle = rgba('#ffffff', 0.28);
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  const stepX = width / (frame.wave.length - 1);
-  for (let i = 0; i < frame.wave.length; i++) {
-    const x = -width / 2 + i * stepX;
-    const y = baseY - frame.wave[i] * 34 - 34;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-
-  const progress = duration > 0 ? Math.min(1, frame.t / duration) : 0;
-  ctx.fillStyle = rgba('#ffffff', 0.12);
-  ctx.fillRect(-dw / 2 + dw * 0.05, dh / 2 - dh * 0.02, width, 3);
-  ctx.fillStyle = config.primary;
-  ctx.fillRect(-dw / 2 + dw * 0.05, dh / 2 - dh * 0.02, width * progress, 3);
   ctx.restore();
 }
 
