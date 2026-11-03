@@ -355,7 +355,7 @@ function syncChrome(): void {
     '#lyricWordsOut': String(Math.round(config.lyrics.maxWords)),
     '#lyricOffsetOut': `${config.lyrics.offset.toFixed(1)} s`,
     '#lyricOpacityOut': `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
-  '#lyricPillOpacityOut': `${Math.round(config.lyrics.pillOpacity * 100)}%`,
+    '#lyricPillOpacityOut': `${Math.round(config.lyrics.pillOpacity * 100)}%`,
     '#lyricGlowOut': `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
     '#primaryHex': config.primary.toUpperCase(),
     '#secondaryHex': config.secondary.toUpperCase(),
@@ -400,7 +400,11 @@ function syncChrome(): void {
   setRange('#lyricLines', config.lyrics.lines);
   setRange('#lyricWords', config.lyrics.maxWords);
   setRange('#lyricOffset', Math.round(config.lyrics.offset * 10));
-  setRange('#lyricOpacity', Math.round((config.lyrics.opacity ?? 1) * 100));
+  const lyricOpacityPercent = Math.round((config.lyrics.opacity ?? 1) * 100);
+  setRange('#lyricOpacity', lyricOpacityPercent);
+  document.querySelectorAll<HTMLButtonElement>('#lyricOpacityQuick button').forEach((button) => {
+    button.classList.toggle('is-active', Number(button.dataset.value) === lyricOpacityPercent);
+  });
   setRange('#lyricPillOpacity', Math.round(config.lyrics.pillOpacity * 100));
   setRange('#lyricGlow', Math.round((config.lyrics.glow ?? 0) * 100));
   setRange('#seekRange', 0);
@@ -1625,11 +1629,30 @@ function bindEvents(): void {
     state.version += 1;
   });
 
-  ui.$('#lyricOpacity').addEventListener('input', (event) => {
-    state.config.lyrics.opacity = Number((event.target as HTMLInputElement).value) / 100;
+  const applyLyricOpacity = (percent: number): void => {
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+    state.config.lyrics.opacity = clamped / 100;
+    const slider = document.querySelector<HTMLInputElement>('#lyricOpacity');
+    if (slider) {
+      slider.value = String(clamped);
+      ui.paintRange(slider);
+    }
     const out = document.querySelector('#lyricOpacityOut');
-    if (out) out.textContent = `${Math.round(state.config.lyrics.opacity * 100)}%`;
+    if (out) out.textContent = `${clamped}%`;
+    document.querySelectorAll<HTMLButtonElement>('#lyricOpacityQuick button').forEach((button) => {
+      button.classList.toggle('is-active', Number(button.dataset.value) === clamped);
+    });
     state.version += 1;
+  };
+
+  ui.$('#lyricOpacity').addEventListener('input', (event) => {
+    applyLyricOpacity(Number((event.target as HTMLInputElement).value));
+  });
+
+  ui.$('#lyricOpacityQuick').addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-value]');
+    if (!button) return;
+    applyLyricOpacity(Number(button.dataset.value));
   });
 
   ui.$('#lyricPillOpacity').addEventListener('input', (event) => {

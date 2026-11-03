@@ -462,6 +462,11 @@ textarea:focus-visible {
   padding: 6px 4px;
 }
 
+/* Quick-pick row under the lyric text opacity slider. */
+.quick-opacity {
+  margin-top: 8px;
+}
+
 /* ---------- fields ---------- */
 
 .field {

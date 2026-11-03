@@ -470,6 +470,11 @@ textarea:focus-visible {
   padding: 6px 4px;
 }
 
+/* Quick-pick row under the lyric text opacity slider. */
+.quick-opacity {
+  margin-top: 8px;
+}
+
 /* ---------- fields ---------- */
 
 .field {
@@ -2292,6 +2297,12 @@ body.is-modal {
                   <div class="field">
                     <div class="field-top"><label for="lyricOpacity">Text opacity</label><output id="lyricOpacityOut">100%</output></div>
                     <input type="range" id="lyricOpacity" min="0" max="100" step="1" value="100" />
+                    <div class="seg tight quick-opacity" id="lyricOpacityQuick" role="group" aria-label="Quick text opacity">
+                      <button type="button" data-value="100" class="is-active">100%</button>
+                      <button type="button" data-value="90">90%</button>
+                      <button type="button" data-value="85">85%</button>
+                      <button type="button" data-value="80">80%</button>
+                    </div>
                   </div>
                   <div class="field">
                     <div class="field-top"><label for="lyricPillOpacity">Pill opacity</label><output id="lyricPillOpacityOut">50%</output></div>
@@ -8217,7 +8228,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
     setRange("#lyricLines", config.lyrics.lines);
     setRange("#lyricWords", config.lyrics.maxWords);
     setRange("#lyricOffset", Math.round(config.lyrics.offset * 10));
-    setRange("#lyricOpacity", Math.round((config.lyrics.opacity ?? 1) * 100));
+    const lyricOpacityPercent = Math.round((config.lyrics.opacity ?? 1) * 100);
+    setRange("#lyricOpacity", lyricOpacityPercent);
+    document.querySelectorAll("#lyricOpacityQuick button").forEach((button) => {
+      button.classList.toggle("is-active", Number(button.dataset.value) === lyricOpacityPercent);
+    });
     setRange("#lyricPillOpacity", Math.round(config.lyrics.pillOpacity * 100));
     setRange("#lyricGlow", Math.round((config.lyrics.glow ?? 0) * 100));
     setRange("#seekRange", 0);
@@ -9318,11 +9333,28 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (out) out.textContent = `${event.target.value}%`;
       state.version += 1;
     });
-    $("#lyricOpacity").addEventListener("input", (event) => {
-      state.config.lyrics.opacity = Number(event.target.value) / 100;
+    const applyLyricOpacity = (percent) => {
+      const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+      state.config.lyrics.opacity = clamped / 100;
+      const slider = document.querySelector("#lyricOpacity");
+      if (slider) {
+        slider.value = String(clamped);
+        paintRange(slider);
+      }
       const out = document.querySelector("#lyricOpacityOut");
-      if (out) out.textContent = `${Math.round(state.config.lyrics.opacity * 100)}%`;
+      if (out) out.textContent = `${clamped}%`;
+      document.querySelectorAll("#lyricOpacityQuick button").forEach((button) => {
+        button.classList.toggle("is-active", Number(button.dataset.value) === clamped);
+      });
       state.version += 1;
+    };
+    $("#lyricOpacity").addEventListener("input", (event) => {
+      applyLyricOpacity(Number(event.target.value));
+    });
+    $("#lyricOpacityQuick").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-value]");
+      if (!button) return;
+      applyLyricOpacity(Number(button.dataset.value));
     });
     $("#lyricPillOpacity").addEventListener("input", (event) => {
       state.config.lyrics.pillOpacity = Number(event.target.value) / 100;

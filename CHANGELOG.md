@@ -325,3 +325,13 @@ stock-photo library.
 - Tests: *lyrics have a text opacity slider* (the slider writes 0.4 and reads
   back `40 %`) and *lyric text opacity fades the type* (peak glyph brightness
   255 -> 92 at 35 %, and no lit pixels at 0).
+
+## 1.8.6 - 2026-11-03
+
+- **The 85-90 % range is one click away.** Under *Text opacity* there are now four
+  stops - 100 %, 90 %, 85 %, 80 % - and the active one lights up, so a caption can
+  be dropped to the 85-90 % blend that folk and country footage wants without
+  fishing for the value with the slider. The slider still moves in 1 % steps
+  between them, and the stops travel in saved looks like any other setting.
+- Tests: *text opacity offers 90, 85 and 80 percent stops* (each stop clicks,
+  writes 0.9 / 0.85 / 0.8, and reads back `85 %` with the chip lit).

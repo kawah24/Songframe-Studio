@@ -754,6 +754,45 @@ check(
   'lyric text opacity fades the type',
   JSON.stringify({ full: lyricOpacity.full, faded: lyricOpacity.faded, gone: lyricOpacity.gone }),
 );
+
+// the 90 / 85 / 80 stops the folk-and-country guidelines ask for must be one click away
+const opacityStops = await page.evaluate(() => {
+  const slider = document.querySelector('#lyricOpacity');
+  const out = document.querySelector('#lyricOpacityOut');
+  const buttons = [...document.querySelectorAll('#lyricOpacityQuick button')];
+  const click = (label) => {
+    const button = buttons.find((node) => node.textContent.trim() === label);
+    if (!button) return null;
+    button.click();
+    return {
+      value: slider ? slider.value : null,
+      out: out ? out.textContent : null,
+      config: window.songframe.getState().lyrics.opacity,
+      active: button.classList.contains('is-active'),
+    };
+  };
+  const stops = {
+    labels: buttons.map((node) => node.textContent.trim()),
+    p90: click('90%'),
+    p85: click('85%'),
+    p80: click('80%'),
+  };
+  click('100%');
+  return stops;
+});
+check(
+  opacityStops.p90 &&
+    opacityStops.p85 &&
+    opacityStops.p80 &&
+    opacityStops.p90.config === 0.9 &&
+    opacityStops.p85.config === 0.85 &&
+    opacityStops.p80.config === 0.8 &&
+    opacityStops.p85.value === '85' &&
+    opacityStops.p85.out === '85%' &&
+    opacityStops.p85.active,
+  'text opacity offers 90, 85 and 80 percent stops',
+  JSON.stringify(opacityStops),
+);
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 
