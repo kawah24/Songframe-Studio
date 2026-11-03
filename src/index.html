@@ -115,6 +115,7 @@
                   <div class="field-top"><label for="quality">Video quality</label><output id="qualityOut">Balanced</output></div>
                   <input type="range" id="quality" min="50" max="180" step="1" value="100" />
                   <p class="hint">Higher means a larger file. 100% is the balanced default.</p>
+                  <p class="hint" id="qualitySize">Estimated file: load a song to see the size.</p>
                 </div>
                 <span class="label spaced">Render range</span>
                 <div class="range-row">
@@ -132,6 +133,10 @@
                 <div class="field">
                   <div class="field-top"><label for="dim">Dimming</label><output id="dimOut">60%</output></div>
                   <input type="range" id="dim" min="0" max="100" step="1" value="60" />
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="zoomSpeed">Zoom speed</label><output id="zoomSpeedOut">1x</output></div>
+                  <input type="range" id="zoomSpeed" min="0" max="400" step="25" value="100" />
                 </div>
               </div>
 
@@ -169,6 +174,33 @@
                     </div>
                     <span class="credit-line" id="coverCredit" hidden></span>
                   </div>
+                </div>
+              </div>
+
+              <div class="group">
+                <span class="label">Watermark</span>
+                <div class="center-art">
+                  <div class="thumb" id="waterThumb"></div>
+                  <div class="center-art-actions">
+                    <div class="center-art-row">
+                      <button class="btn ghost small" id="btnWater" type="button">Choose image</button>
+                      <button class="btn ghost small" id="btnWaterClear" type="button">Remove</button>
+                    </div>
+                    <span class="credit-line" id="waterNote">No mark yet</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="waterScale">Mark size</label><output id="waterScaleOut">12%</output></div>
+                  <input type="range" id="waterScale" min="3" max="40" step="1" value="12" />
+                  <div class="field-top" style="margin-top: 6px"><label for="waterOpacity">Opacity</label><output id="waterOpacityOut">75%</output></div>
+                  <input type="range" id="waterOpacity" min="0" max="100" step="1" value="75" />
+                  <div class="field-top" style="margin-top: 6px"><label for="waterCorner">Corner</label></div>
+                  <select id="waterCorner">
+                    <option value="br">Bottom right</option>
+                    <option value="bl">Bottom left</option>
+                    <option value="tr">Top right</option>
+                    <option value="tl">Top left</option>
+                  </select>
                 </div>
               </div>
             </section>
@@ -213,6 +245,10 @@
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
                   </div>
                   <div class="field">
+                    <div class="field-top"><label for="lyricWords">Words per line</label><output id="lyricWordsOut">8</output></div>
+                    <input type="range" id="lyricWords" min="3" max="16" step="1" value="8" />
+                  </div>
+                  <div class="field">
                     <div class="field-top"><label for="lyricOffset">Timing offset</label><output id="lyricOffsetOut">0.0 s</output></div>
                     <input type="range" id="lyricOffset" min="-500" max="500" step="5" value="0" />
                   </div>
@@ -222,6 +258,10 @@
                     <label class="color-field"><span>Text</span><input type="color" id="lyricColor" value="#ffffff" /></label>
                     <label class="color-field"><span>Highlight</span><input type="color" id="lyricHighlight" value="#ec4899" /></label>
                     <label class="color-field"><span>Pill</span><input type="color" id="lyricPill" value="#000000" /></label>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricOpacity">Text opacity</label><output id="lyricOpacityOut">100%</output></div>
+                    <input type="range" id="lyricOpacity" min="0" max="100" step="1" value="100" />
                   </div>
                   <div class="field">
                     <div class="field-top"><label for="lyricPillOpacity">Pill opacity</label><output id="lyricPillOpacityOut">50%</output></div>
@@ -319,6 +359,7 @@
     <input type="file" id="fileImage" accept="image/*" hidden />
     <input type="file" id="fileVideo" accept="video/*" hidden />
     <input type="file" id="fileCover" accept="image/*" hidden />
+    <input type="file" id="fileWatermark" accept="image/*" hidden />
     <input type="file" id="fileLyrics" accept=".lrc,.srt,.vtt,.txt,text/plain,application/x-subrip" hidden />
     <input type="file" id="fileLook" accept=".json,application/json" hidden />
 

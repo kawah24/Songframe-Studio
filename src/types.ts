@@ -68,11 +68,15 @@ export interface LyricsConfig {
   pos: LyricsPos;
   size: number;
   lines: number;
+  /** Longest cue in words; longer lines are split into more cues. */
+  maxWords: number;
   showSections: boolean;
   color: string;
   highlight: string;
   pill: string;
   pillOpacity: number;
+  /** Lyric text opacity, 0..1; absent means fully opaque. */
+  opacity?: number;
   offset: number;
 }
 
@@ -99,6 +103,13 @@ export interface Config {
   showCredit: boolean;
   /** 0..1 — how much the background is dimmed. */
   dim: number;
+  /** Multiplier on the background's slow zoom; 0 freezes it. */
+  zoomSpeed: number;
+  /** 0..1 watermark strength; the mark is skipped at 0. */
+  watermarkOpacity: number;
+  /** Mark width as a fraction of the frame's short side. */
+  watermarkScale: number;
+  watermarkCorner: 'tl' | 'tr' | 'bl' | 'br';
   /** 0.5..2 — gain applied to the analysed spectrum before drawing. */
   sensitivity: number;
   /** How many bars, rows or columns the element-based presets draw. */

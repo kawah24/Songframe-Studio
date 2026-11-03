@@ -2,7 +2,7 @@ import { decodeSong, frameAt, Playback, type Song } from './audio';
 import defaultLogoUrl from './assets/logo.webp';
 import { initialsOf, loadImageFile, loadImageUrl, loadVideoFile, loadVideoUrl, makeCoverArt } from './backgrounds';
 import { fontFamily, hydrateSystemFonts } from './fonts';
-import { exportFrame, exportVideo, frameSize, type ExportResult } from './export';
+import { estimateSizeMB, exportFrame, exportVideo, frameSize, renderSeconds, type ExportResult } from './export';
 import { parseLyrics } from './lyrics';
 import { creditLine, resolveFullSize, type MediaItem } from './media';
 import { createMediaPicker, PATTERN_NAMES } from './media-ui';
@@ -34,6 +34,7 @@ interface State {
   lastTextSig: string;
   lastExportUrl: string;
   backgroundCredit: string;
+  backgroundPage: string;
   centreCredit: string;
   lastExportName: string;
   lastExportPath: string;
@@ -44,7 +45,7 @@ const state: State = {
   config: defaultConfig(),
   song: null,
   lyrics: [],
-  assets: { cover: null, background: null, backgroundVideo: null },
+  assets: { cover: null, background: null, backgroundVideo: null, watermark: null },
   activeTextId: 'title',
   customCover: null,
   generatedCover: null,
@@ -58,6 +59,7 @@ const state: State = {
   lastTextSig: '',
   lastExportUrl: '',
   backgroundCredit: '',
+  backgroundPage: '',
   centreCredit: '',
   lastExportName: '',
   lastExportPath: '',
@@ -300,6 +302,23 @@ function updateTransport(time: number, duration: number): void {
   }
 }
 
+function qualityLabel(quality: number): string {
+  return quality <= 0.75 ? 'Small' : quality <= 1 ? 'Balanced' : 'High';
+}
+
+function syncSizeEstimate(): void {
+  const el = document.querySelector('#qualitySize');
+  if (!el) return;
+  const seconds = renderSeconds(state.config, state.song?.duration ?? 0);
+  if (!state.song || !seconds) {
+    el.textContent = 'Estimated file: load a song to see the size.';
+    return;
+  }
+  const mb = estimateSizeMB(state.config, seconds);
+  const size = mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : mb >= 100 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
+  el.textContent = `Estimated file: ~${size} (${Math.round(seconds)} s)`;
+}
+
 function syncChrome(): void {
   const config = state.config;
   const size = frameSize(config);
@@ -322,16 +341,21 @@ function syncChrome(): void {
 
   const values: Record<string, string> = {
     '#particlesOut': String(config.particles),
-    '#qualityOut': config.quality <= 0.75 ? 'Small' : config.quality <= 1 ? 'Balanced' : 'High',
+    '#qualityOut': `${Math.round(config.quality * 100)}% · ${qualityLabel(config.quality)}`,
     '#dimOut': `${Math.round(config.dim * 100)}%`,
+    '#zoomSpeedOut': config.zoomSpeed <= 0 ? 'Off' : `${config.zoomSpeed}x`,
+    '#waterScaleOut': `${Math.round(config.watermarkScale * 100)}%`,
+    '#waterOpacityOut': `${Math.round(config.watermarkOpacity * 100)}%`,
     '#sensitivityOut': `${Math.round(config.sensitivity * 100)}%`,
     '#barsOut': String(Math.round(config.bars)),
     '#scaleOut': `${Math.round(config.scale * 100)}%`,
     '#opacityOut': `${Math.round(config.visualizerOpacity * 100)}%`,
     '#lyricSizeOut': String(Math.round(config.lyrics.size)),
-    '#lyricLinesOut': String(config.lyrics.lines),
+    '#lyricLinesOut': String(Math.round(config.lyrics.lines)),
+    '#lyricWordsOut': String(Math.round(config.lyrics.maxWords)),
     '#lyricOffsetOut': `${config.lyrics.offset.toFixed(1)} s`,
-    '#lyricPillOpacityOut': `${Math.round(config.lyrics.pillOpacity * 100)}%`,
+    '#lyricOpacityOut': `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
+  '#lyricPillOpacityOut': `${Math.round(config.lyrics.pillOpacity * 100)}%`,
     '#lyricGlowOut': `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
     '#primaryHex': config.primary.toUpperCase(),
     '#secondaryHex': config.secondary.toUpperCase(),
@@ -361,13 +385,22 @@ function syncChrome(): void {
   setRange('#particles', config.particles);
   setRange('#quality', Math.round(config.quality * 100));
   setRange('#dim', Math.round(config.dim * 100));
+  setRange('#zoomSpeed', Math.round(config.zoomSpeed * 100));
+  setRange('#waterScale', Math.round(config.watermarkScale * 100));
+  setRange('#waterOpacity', Math.round(config.watermarkOpacity * 100));
+  const cornerSelect = document.querySelector<HTMLSelectElement>('#waterCorner');
+  if (cornerSelect && document.activeElement !== cornerSelect) cornerSelect.value = config.watermarkCorner;
+  refreshWatermark();
+  syncSizeEstimate();
   setRange('#sensitivity', Math.round(config.sensitivity * 100));
   setRange('#bars', Math.round(config.bars));
   setRange('#scale', Math.round(config.scale * 100));
   setRange('#opacity', Math.round(config.visualizerOpacity * 100));
   setRange('#lyricSize', Math.round(config.lyrics.size));
   setRange('#lyricLines', config.lyrics.lines);
+  setRange('#lyricWords', config.lyrics.maxWords);
   setRange('#lyricOffset', Math.round(config.lyrics.offset * 10));
+  setRange('#lyricOpacity', Math.round((config.lyrics.opacity ?? 1) * 100));
   setRange('#lyricPillOpacity', Math.round(config.lyrics.pillOpacity * 100));
   setRange('#lyricGlow', Math.round((config.lyrics.glow ?? 0) * 100));
   setRange('#seekRange', 0);
@@ -576,6 +609,25 @@ function renderBackgroundTools(): void {
   }
   host.appendChild(note);
 
+  // The API caps photos at 1280 px on a standard key; the source page is the
+  // only place to fetch the untouched original, so keep it one click away.
+  if ((config.bg === 'image' || config.bg === 'video') && state.backgroundPage) {
+    const source = document.createElement('a');
+    source.className = 'bg-source';
+    source.href = state.backgroundPage;
+    source.textContent = state.backgroundPage;
+    source.target = '_blank';
+    source.rel = 'noreferrer';
+    source.title = 'Open the source page to download the highest-resolution file';
+    source.addEventListener('click', (event) => {
+      const bridge = (window as unknown as { pywebview?: { api?: { open_url?: (url: string) => Promise<unknown> } } }).pywebview;
+      if (!bridge?.api?.open_url) return;
+      event.preventDefault();
+      void bridge.api.open_url(state.backgroundPage);
+    });
+    host.appendChild(source);
+  }
+
   if (config.credit.trim()) {
     const credit = document.createElement('p');
     credit.className = 'bg-note credit';
@@ -676,6 +728,7 @@ function clearSong(): void {
   state.useGeneratedArt = false;
   state.assets.cover = null;
   state.backgroundCredit = '';
+    state.backgroundPage = '';
   state.centreCredit = '';
   state.config.rangeStart = 0;
   state.config.rangeEnd = 0;
@@ -760,6 +813,7 @@ async function loadAudio(file: File): Promise<void> {
       state.config.rangeStart = 0;
       state.config.rangeEnd = 0;
       state.backgroundCredit = '';
+    state.backgroundPage = '';
       state.centreCredit = '';
       state.config.primary = palette.primary;
       state.config.secondary = palette.secondary;
@@ -798,6 +852,7 @@ async function loadBackgroundImage(file: File): Promise<void> {
     state.assets.background = await loadImageFile(file);
     commit(() => { state.config.bg = 'image'; });
     state.backgroundCredit = '';
+    state.backgroundPage = '';
     syncCredit();
     ui.toast('Background image ready.');
   } catch (error) {
@@ -811,6 +866,7 @@ async function loadBackgroundVideo(file: File): Promise<void> {
     startBackgroundVideo();
     commit(() => { state.config.bg = 'video'; });
     state.backgroundCredit = '';
+    state.backgroundPage = '';
     syncCredit();
     ui.toast('Background video ready — it loops for the whole song.');
   } catch (error) {
@@ -831,9 +887,31 @@ async function loadCoverImage(file: File): Promise<void> {
   }
 }
 
+async function loadWatermarkImage(file: File): Promise<void> {
+  try {
+    state.assets.watermark = await loadImageFile(file);
+    commit(() => {});
+    refreshWatermark();
+    ui.toast('Watermark added.');
+  } catch (error) {
+    ui.toast(error instanceof Error ? error.message : 'That image could not be read.', 'err');
+  }
+}
+
+function refreshWatermark(): void {
+  const thumb = document.querySelector<HTMLElement>('#waterThumb');
+  const note = document.querySelector<HTMLElement>('#waterNote');
+  const mark = state.assets.watermark;
+  if (thumb) {
+    thumb.style.backgroundImage = mark ? `url("${mark.src}")` : 'none';
+    thumb.classList.toggle('is-empty', !mark);
+  }
+  if (note) note.textContent = mark ? 'Mark ready — drawn on top of the frame.' : 'No mark yet';
+}
+
 function applyLyricText(text: string): void {
   const duration = state.song?.duration ?? 0;
-  const lines = parseLyrics(text, duration);
+  const lines = parseLyrics(text, duration, state.config.lyrics.maxWords);
   if (lines.length === 0) {
     ui.toast('No lyric lines found in that text.', 'err');
     return;
@@ -1327,11 +1405,13 @@ function bindEvents(): void {
   ui.$('#rangeStart').addEventListener('input', (event) => {
     state.config.rangeStart = Math.max(0, Number((event.target as HTMLInputElement).value) || 0);
     state.version += 1;
+    syncSizeEstimate();
   });
 
   ui.$('#rangeEnd').addEventListener('input', (event) => {
     state.config.rangeEnd = Math.max(0, Number((event.target as HTMLInputElement).value) || 0);
     state.version += 1;
+    syncSizeEstimate();
   });
 
   ui.$('#btnRangePlayhead').addEventListener('click', () => {
@@ -1347,7 +1427,8 @@ function bindEvents(): void {
     state.config.quality = value;
     state.version += 1;
     const out = document.querySelector('#qualityOut');
-    if (out) out.textContent = value <= 0.75 ? 'Small' : value <= 1 ? 'Balanced' : 'High';
+    if (out) out.textContent = `${Math.round(value * 100)}% · ${qualityLabel(value)}`;
+    syncSizeEstimate();
   });
 
   ui.$('#dim').addEventListener('input', (event) => {
@@ -1356,6 +1437,14 @@ function bindEvents(): void {
     state.version += 1;
     const out = document.querySelector('#dimOut');
     if (out) out.textContent = `${Math.round(value * 100)}%`;
+  });
+
+  ui.$('#zoomSpeed').addEventListener('input', (event) => {
+    const value = Number((event.target as HTMLInputElement).value) / 100;
+    state.config.zoomSpeed = value;
+    state.version += 1;
+    const out = document.querySelector('#zoomSpeedOut');
+    if (out) out.textContent = value <= 0 ? 'Off' : `${value}x`;
   });
 
   ui.$('#scale').addEventListener('input', (event) => {
@@ -1387,6 +1476,38 @@ function bindEvents(): void {
   bindColor('#lyricColor', (value) => { state.config.lyrics.color = value; });
   bindColor('#lyricHighlight', (value) => { state.config.lyrics.highlight = value; });
   bindColor('#lyricPill', (value) => { state.config.lyrics.pill = value; });
+
+  ui.$('#btnWater').addEventListener('click', () => ui.$<HTMLInputElement>('#fileWatermark').click());
+  ui.$('#fileWatermark').addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) void loadWatermarkImage(file);
+    input.value = '';
+  });
+  ui.$('#btnWaterClear').addEventListener('click', () => {
+    state.assets.watermark = null;
+    commit(() => {});
+    refreshWatermark();
+    ui.toast('Watermark removed.');
+  });
+  ui.$('#waterScale').addEventListener('input', (event) => {
+    const value = Number((event.target as HTMLInputElement).value) / 100;
+    state.config.watermarkScale = value;
+    state.version += 1;
+    const out = document.querySelector('#waterScaleOut');
+    if (out) out.textContent = `${Math.round(value * 100)}%`;
+  });
+  ui.$('#waterOpacity').addEventListener('input', (event) => {
+    const value = Number((event.target as HTMLInputElement).value) / 100;
+    state.config.watermarkOpacity = value;
+    state.version += 1;
+    const out = document.querySelector('#waterOpacityOut');
+    if (out) out.textContent = `${Math.round(value * 100)}%`;
+  });
+  ui.$('#waterCorner').addEventListener('change', (event) => {
+    state.config.watermarkCorner = (event.target as HTMLSelectElement).value as Config['watermarkCorner'];
+    state.version += 1;
+  });
 
   ui.$('#btnCover').addEventListener('click', () => ui.$<HTMLInputElement>('#fileCover').click());
   ui.$('#btnCoverLibrary').addEventListener('click', () => picker?.open('photo', 'center'));
@@ -1475,6 +1596,16 @@ function bindEvents(): void {
     if (out) out.textContent = String(state.config.lyrics.lines);
   });
 
+  ui.$('#lyricWords').addEventListener('input', (event) => {
+    const value = Math.max(3, Math.round(Number((event.target as HTMLInputElement).value) || 8));
+    state.config.lyrics.maxWords = value;
+    state.version += 1;
+    const out = document.querySelector('#lyricWordsOut');
+    if (out) out.textContent = String(value);
+    const area = document.querySelector<HTMLTextAreaElement>('#lyricText');
+    if (area && area.value.trim() && state.song) applyLyricText(area.value);
+  });
+
   ui.$('#lyricOffset').addEventListener('input', (event) => {
     state.config.lyrics.offset = Number((event.target as HTMLInputElement).value) / 10;
     state.version += 1;
@@ -1491,6 +1622,13 @@ function bindEvents(): void {
     state.config.lyrics.glow = Number((event.target as HTMLInputElement).value) / 100;
     const out = document.querySelector('#lyricGlowOut');
     if (out) out.textContent = `${(event.target as HTMLInputElement).value}%`;
+    state.version += 1;
+  });
+
+  ui.$('#lyricOpacity').addEventListener('input', (event) => {
+    state.config.lyrics.opacity = Number((event.target as HTMLInputElement).value) / 100;
+    const out = document.querySelector('#lyricOpacityOut');
+    if (out) out.textContent = `${Math.round(state.config.lyrics.opacity * 100)}%`;
     state.version += 1;
   });
 
@@ -1683,6 +1821,7 @@ function boot(): void {
         commit(() => {
           state.config.bg = 'image';
           state.backgroundCredit = creditLine(item);
+          state.backgroundPage = item.page;
           state.config.showCredit = true;
         });
         syncCredit();
@@ -1701,6 +1840,7 @@ function boot(): void {
         commit(() => {
           state.config.bg = 'video';
           state.backgroundCredit = creditLine(item);
+          state.backgroundPage = item.page;
           state.config.showCredit = true;
         });
         syncCredit();

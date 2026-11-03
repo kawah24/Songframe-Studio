@@ -21,11 +21,12 @@ import sys
 import tempfile
 import threading
 import time
+import webbrowser
 from pathlib import Path
 from typing import Any
 
 APP_NAME = "Songframe Studio"
-APP_VERSION = "1.7.6"
+APP_VERSION = "1.8.5"
 WINDOW_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 VIDEO_TYPES = ("Video file (*.mp4;*.webm)", "All files (*.*)")
@@ -214,6 +215,17 @@ class Api:
         except Exception as error:  # noqa: BLE001
             return {"ok": False, "error": str(error)}
         return {"ok": True}
+
+    def open_url(self, url: str) -> dict[str, Any]:
+        """Open a source page in the user's browser, never inside the webview."""
+        link = str(url or "").strip()
+        if not link.startswith(("http://", "https://")):
+            return {"ok": False, "error": "only http(s) links go to the browser"}
+        try:
+            webbrowser.open(link)
+            return {"ok": True}
+        except Exception as error:  # noqa: BLE001 - the UI only needs a reason
+            return {"ok": False, "error": str(error)}
 
     def open_folder(self, path: str) -> dict[str, Any]:
         target = Path(path)

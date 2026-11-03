@@ -8,6 +8,8 @@ export interface Assets {
   cover: HTMLImageElement | HTMLCanvasElement | null;
   background: HTMLImageElement | null;
   backgroundVideo: HTMLVideoElement | null;
+  /** Optional: an overlay mark drawn on top of everything. */
+  watermark?: HTMLImageElement | null;
 }
 
 export interface RenderOptions {
@@ -168,6 +170,46 @@ export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height
     ctx.restore();
   }
 
+  drawWatermark(ctx, dw, dh, config, assets);
+
+}
+
+/**
+ * The mark sits above the type and the credit: it is branding, not content, so
+ * effects and layout never move it. Sized off the frame's short side, so the
+ * same 12 % reads the same in 16:9 and 9:16.
+ */
+function drawWatermark(
+  ctx: CanvasRenderingContext2D,
+  dw: number,
+  dh: number,
+  config: Config,
+  assets: Assets,
+): void {
+  const mark = assets.watermark;
+  if (!mark) return;
+  const strength = Math.max(0, Math.min(1, config.watermarkOpacity ?? 0));
+  if (strength <= 0.001) return;
+
+  const nw = mark.naturalWidth || mark.width;
+  const nh = mark.naturalHeight || mark.height;
+  if (!nw || !nh) return;
+
+  const short = Math.min(dw, dh);
+  const width = short * Math.max(0.03, Math.min(0.4, config.watermarkScale ?? 0.12));
+  const height = width * (nh / nw);
+  const margin = short * 0.045;
+  const corner = config.watermarkCorner ?? 'br';
+  const left = corner === 'tl' || corner === 'bl';
+  const top = corner === 'tl' || corner === 'tr';
+  const x = left ? -dw / 2 + margin : dw / 2 - margin - width;
+  const y = top ? -dh / 2 + margin : dh / 2 - margin - height;
+
+  ctx.save();
+  ctx.globalAlpha = strength;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(mark, x, y, width, height);
+  ctx.restore();
 }
 
 function drawBackground(
@@ -179,6 +221,8 @@ function drawBackground(
   assets: Assets,
 ): void {
   const dim = config.dim;
+  // 0 freezes the drift, 1 keeps the historical rate (~57 s and ~35 s periods).
+  const drift = Math.max(0, config.zoomSpeed ?? 1);
   const source =
     config.bg === 'video' && assets.backgroundVideo
       ? assets.backgroundVideo
@@ -188,14 +232,17 @@ function drawBackground(
 
   if (config.bg === 'generated' || config.bg === 'pattern') {
     ctx.save();
-    const zoom = 1.06 + Math.sin(t * 0.11) * 0.045;
+    const zoom = drift <= 0 ? 1 : 1.06 + Math.sin(t * 0.11 * drift) * 0.045;
     ctx.scale(zoom, zoom);
     const archetype = config.bg === 'pattern' ? config.pattern : undefined;
     drawGeneratedBackground(ctx, dw, dh, t, config.bgSeed, config.primary, config.secondary, archetype);
     ctx.restore();
   } else if (source) {
     ctx.save();
-    const zoom = 1.06 + Math.sin(t * 0.18) * 0.035;
+    // 'low' is the canvas default; it is what makes a large photo look soft
+    // once it is scaled to the frame. restore() puts the old value back.
+    ctx.imageSmoothingQuality = 'high';
+    const zoom = drift <= 0 ? 1 : 1.06 + Math.sin(t * 0.18 * drift) * 0.035;
     ctx.scale(zoom, zoom);
     drawCover(ctx, source, 0, 0, dw, dh);
     ctx.restore();

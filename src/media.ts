@@ -12,7 +12,7 @@ export interface MediaItem {
   source: MediaSource;
   /** Picture for the grid, the preview and the canvas. */
   thumb: string;
-  /** What gets drawn (a 1024 px photograph, or a 480/720p transcode). */
+  /** What gets drawn: the largest rendition the provider will serve. */
   full: string;
   width: number;
   height: number;
@@ -190,14 +190,32 @@ interface PixabayHit {
   previewURL?: string;
   webformatURL?: string;
   largeImageURL?: string;
+  /** 1920 px - approved (full API access) keys only. */
+  fullHDURL?: string;
+  /** The original at imageWidth x imageHeight - approved keys only. */
+  imageURL?: string;
   imageWidth?: number;
   imageHeight?: number;
   videos?: Record<string, PixabayVideo>;
 }
 
+/** The pixel size of the rendition we actually link to. */
+function renditionSize(hit: PixabayHit, url: string | undefined): { width: number; height: number } {
+  const ow = hit.imageWidth ?? 0;
+  const oh = hit.imageHeight ?? 0;
+  if (!ow || !oh || !url) return { width: ow, height: oh };
+  if (hit.imageURL && url === hit.imageURL) return { width: ow, height: oh };
+  const cap = hit.fullHDURL && url === hit.fullHDURL ? 1920 : hit.largeImageURL && url === hit.largeImageURL ? 1280 : 640;
+  const scale = Math.min(1, cap / Math.max(ow, oh));
+  return { width: Math.round(ow * scale), height: Math.round(oh * scale) };
+}
+
 /**
- * Pixabay needs a free API key (their terms, not ours). Photos are offered at
- * 1280 px and clips at 1280×720, both of which the CDN serves with CORS.
+ * Pixabay needs a free API key (their terms, not ours). A standard key returns
+ * renditions up to 1280 px; the original and the 1920 px version are only
+ * included for accounts approved for full API access, so the URL chain below
+ * takes whatever the key actually offers. Clips come from `large` first, which
+ * is usually 3840x2160.
  */
 export async function searchPixabay(
   query: string,
@@ -238,7 +256,7 @@ export async function searchPixabay(
     const title = (hit.tags ?? 'Pixabay media').split(',').slice(0, 3).join(', ').trim();
 
     if (kind === 'photo') {
-      const full = hit.largeImageURL ?? hit.webformatURL;
+      const full = hit.imageURL ?? hit.fullHDURL ?? hit.largeImageURL ?? hit.webformatURL;
       const thumb = hit.webformatURL ?? hit.previewURL;
       if (!full || !thumb) continue;
       items.push({
@@ -248,8 +266,7 @@ export async function searchPixabay(
         source: 'pixabay',
         thumb,
         full,
-        width: hit.imageWidth ?? 0,
-        height: hit.imageHeight ?? 0,
+        ...renditionSize(hit, full),
         license: 'Pixabay Content License',
         author,
         page: hit.pageURL ?? 'https://pixabay.com/',

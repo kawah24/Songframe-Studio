@@ -209,3 +209,119 @@ stock-photo library.
   must be a single colour) and *clean preset still draws particles*. The opacity
   sweep now lists only presets that draw something, since an empty preset cannot
   respond to opacity.
+
+## 1.7.7 — 2026-11-03
+
+- **The background drift has a speed control.** The slow zoom over the backdrop
+  was a hard-coded rate: about 57 s per cycle on generated and pattern
+  backgrounds, about 35 s on photo and video. It now reads `zoomSpeed` (0–4x,
+  default 1x), exposed as a **Zoom speed** slider under Background, next to
+  Dimming. At 0 the drift stops and the 1.06 base scale is dropped, so the frame
+  is shown uncropped; saved looks without the field keep the historical rate.
+- Tests: *a fixed time renders the same frame*, *zoom speed changes the
+  background drift*, *zoom speed 0 freezes the drift*, and the slider reading
+  `Off / 1x / 4x`.
+
+## 1.7.8 — 2026-11-03
+
+- **Pixabay photos come in at the best resolution the key allows.** The search
+  asked for `largeImageURL` alone, which Pixabay caps at 1280 px, so every photo
+  background was upscaled 1.5x for a 1080p frame and about 2.4x when cropped for
+  9:16. The chain is now `imageURL` (the original, full resolution) →
+  `fullHDURL` (1920) → `largeImageURL` (1280) → `webformatURL`. The first
+  two are only returned to accounts approved for Pixabay's full API access, so a
+  standard key still lands on 1280 — the difference is that the app no longer
+  throws the better file away when it is offered.
+- **The caption no longer lies about the size.** Width and height came from
+  `imageWidth`/`imageHeight`, which describe the *original*; the grid printed
+  4000×2250 over a 1280 px file. The caption now reports the rendition that is
+  actually linked, capped at 1920 or 1280 as appropriate.
+- **Photo and video backdrops are downscaled with `imageSmoothingQuality: high`.**
+  Canvas defaults to `low`, a cheap filter that visibly softens a large photo
+  once it is fitted to the frame. Preview and export share the draw path, so both
+  benefit; `restore()` returns the context to its previous state.
+
+## 1.7.9 — 2026-11-03
+
+- **The source page is one click away.** Under “Picture ready.” the sidebar now
+  prints the full page URL of the selected background, whether it came from
+  Pixabay or Wikimedia Commons, and opens it in the system browser. A standard
+  Pixabay key only yields 1280 px, so the page is the one place to fetch the
+  untouched original — the app no longer dead-ends at the rendition it could get.
+- The desktop shell gained open_url, so these links never load inside the
+  webview: only http(s) is accepted and anything else is refused.
+
+
+## 1.8.0 — 2026-11-03
+
+- **Watermark.** Style → Watermark takes a logo or a wordmark image and draws it
+  over the finished frame, above the type and the credit, so effects and layout
+  never move it. Size (3–40 % of the frame's short side), opacity (0–100 %) and
+  the corner are controls, and all three travel in saved looks; dropping the
+  opacity to 0 hides the mark without forgetting the file.
+- The mark scales off the short side, so the same 12 % reads the same in 16:9 and
+  9:16, and it is drawn with high-quality filtering so a large PNG stays crisp
+  when shrunk.
+- Tests: *watermark size slider is listed* and *watermark size, opacity and
+  corner reach the config*.
+
+
+## 1.8.1 — 2026-11-03
+
+- **Video quality shows its percentage, and the file size before you render.**
+  The readout used to say *Balanced* and nothing else; it now reads
+  `125% · High`, and a second line under the slider estimates the MP4:
+  `Estimated file: ~86 MB (245 s)`. The estimate uses the very bitrates the
+  encoder is configured with (`width × height × fps × 0.12 × quality`, plus the
+  audio bitrate) over the seconds the render range actually covers, so it moves
+  with quality, audio bitrate, resolution, frame rate, From/To and the song.
+- Tests: *video quality reads as a percentage* and *file size estimate is shown
+  once a song is loaded*.
+
+
+## 1.8.2 — 2026-11-03
+
+- **Captions wrap at half the frame.** The wrap width was 88 % of the picture, so
+  a sung line ran almost edge to edge and broke wherever it happened to. It is
+  now 50 %, in all three styles (lines, karaoke, scroll), which is what a subtitle
+  block is supposed to look like next to a full-bleed photo.
+- **Sound cues are not sung.** `[Music]`, `(Applause)`, `【掌声】` — a whole cue
+  that is only a bracketed aside — is dropped when the lyrics are parsed, from
+  pasted plain text and from SRT alike. Bracketed asides inside a real line
+  ("hello [laughs] there") are stripped, the words kept. Real section markers
+  ("[Verse 1]") survive, so the section feature still works.
+- Tests: *a [Music] cue is dropped from the lyrics* (pastes a cue plus a line,
+  expects one lyric line).
+
+## 1.8.3 — 2026-11-03
+
+- **“Visible lines” counts drawn rows now, not cues.** It capped how many lyric
+  *lines* were stacked, so one long cue wrapped into two rows while the setting
+  still read 1 — exactly what a 50 % wrap width makes easy to hit. It is a row
+  budget: at 1 you get a single row, at 2 the active cue may use two rows or one
+  row plus the next cue, and so on. Karaoke obeys the same budget.
+- A cue that cannot fit the budget even at the smallest type is trimmed with an
+  ellipsis instead of silently growing past the setting.
+
+## 1.8.4 — 2026-11-03
+
+- **Long cues are split, not shrunk and never clipped.** A cue longer than
+  **Words per line** (new slider, 3–16, default 8) is cut into several cues,
+  each getting a share of the original time by character count. Eight words at
+  50 % width read at full size, so nothing has to shrink to 40 % or lose its
+  tail to an ellipsis.
+- The ellipsis is gone entirely: if a cue still needs a second row at the
+  smallest size, it gets one. Hiding words was worse than a taller block.
+- Changing the slider re-cuts the lyrics already in the box.
+- Tests: *long cues are split into ~8-word lines* (18 words → 3 cues).
+
+## 1.8.5 - 2026-11-03
+
+- **Text opacity for lyrics.** A new slider above *Pill opacity*, 0-100 %, default
+  100 %. It fades the letters, their drop shadow and the glow together, so a
+  caption can sit back over a bright photo without changing its colour; the pill
+  keeps its own separate opacity. Zero means the words are gone while the timing
+  and styles stay intact.
+- Tests: *lyrics have a text opacity slider* (the slider writes 0.4 and reads
+  back `40 %`) and *lyric text opacity fades the type* (peak glyph brightness
+  255 -> 92 at 35 %, and no lit pixels at 0).

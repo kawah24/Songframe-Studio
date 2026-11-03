@@ -40,6 +40,23 @@ function bitrateFor(width: number, height: number, fps: number, quality: number)
   return Math.round(width * height * fps * 0.12 * Math.max(0.4, quality));
 }
 
+/** Seconds the exporter will actually render: the same range rule as exportVideo. */
+export function renderSeconds(config: Config, songDuration: number): number {
+  if (!songDuration) return 0;
+  const start = Math.max(0, Math.min(songDuration - 0.1, config.rangeStart || 0));
+  const wantedEnd = config.rangeEnd && config.rangeEnd > start ? config.rangeEnd : songDuration;
+  const end = Math.max(start + 0.2, Math.min(songDuration, wantedEnd));
+  return Math.max(0.2, end - start);
+}
+
+/** Rough file size in MB from the bitrates the encoder is configured with. */
+export function estimateSizeMB(config: Config, seconds: number): number {
+  if (!seconds) return 0;
+  const { width, height } = frameSize(config);
+  const videoKbps = bitrateFor(width, height, config.fps, config.quality) / 1000;
+  return ((videoKbps + config.audioKbps) * seconds) / 8 / 1024;
+}
+
 const abortError = (): DOMException => new DOMException('The render was cancelled.', 'AbortError');
 
 function throwIfAborted(signal?: AbortSignal): void {

@@ -691,6 +691,17 @@ input[type="color"]::-webkit-color-swatch {
   flex: none;
 }
 
+.bg-source {
+  display: block;
+  font-size: 10.5px;
+  color: var(--accent);
+  line-height: 1.45;
+  margin: 4px 0 0;
+  word-break: break-all;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .bg-note {
   font-size: 10.5px;
   color: var(--faint);
@@ -2134,6 +2145,7 @@ body.is-modal {
                   <div class="field-top"><label for="quality">Video quality</label><output id="qualityOut">Balanced</output></div>
                   <input type="range" id="quality" min="50" max="180" step="1" value="100" />
                   <p class="hint">Higher means a larger file. 100% is the balanced default.</p>
+                  <p class="hint" id="qualitySize">Estimated file: load a song to see the size.</p>
                 </div>
                 <span class="label spaced">Render range</span>
                 <div class="range-row">
@@ -2151,6 +2163,10 @@ body.is-modal {
                 <div class="field">
                   <div class="field-top"><label for="dim">Dimming</label><output id="dimOut">60%</output></div>
                   <input type="range" id="dim" min="0" max="100" step="1" value="60" />
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="zoomSpeed">Zoom speed</label><output id="zoomSpeedOut">1x</output></div>
+                  <input type="range" id="zoomSpeed" min="0" max="400" step="25" value="100" />
                 </div>
               </div>
 
@@ -2188,6 +2204,33 @@ body.is-modal {
                     </div>
                     <span class="credit-line" id="coverCredit" hidden></span>
                   </div>
+                </div>
+              </div>
+
+              <div class="group">
+                <span class="label">Watermark</span>
+                <div class="center-art">
+                  <div class="thumb" id="waterThumb"></div>
+                  <div class="center-art-actions">
+                    <div class="center-art-row">
+                      <button class="btn ghost small" id="btnWater" type="button">Choose image</button>
+                      <button class="btn ghost small" id="btnWaterClear" type="button">Remove</button>
+                    </div>
+                    <span class="credit-line" id="waterNote">No mark yet</span>
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="waterScale">Mark size</label><output id="waterScaleOut">12%</output></div>
+                  <input type="range" id="waterScale" min="3" max="40" step="1" value="12" />
+                  <div class="field-top" style="margin-top: 6px"><label for="waterOpacity">Opacity</label><output id="waterOpacityOut">75%</output></div>
+                  <input type="range" id="waterOpacity" min="0" max="100" step="1" value="75" />
+                  <div class="field-top" style="margin-top: 6px"><label for="waterCorner">Corner</label></div>
+                  <select id="waterCorner">
+                    <option value="br">Bottom right</option>
+                    <option value="bl">Bottom left</option>
+                    <option value="tr">Top right</option>
+                    <option value="tl">Top left</option>
+                  </select>
                 </div>
               </div>
             </section>
@@ -2232,6 +2275,10 @@ body.is-modal {
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
                   </div>
                   <div class="field">
+                    <div class="field-top"><label for="lyricWords">Words per line</label><output id="lyricWordsOut">8</output></div>
+                    <input type="range" id="lyricWords" min="3" max="16" step="1" value="8" />
+                  </div>
+                  <div class="field">
                     <div class="field-top"><label for="lyricOffset">Timing offset</label><output id="lyricOffsetOut">0.0 s</output></div>
                     <input type="range" id="lyricOffset" min="-500" max="500" step="5" value="0" />
                   </div>
@@ -2241,6 +2288,10 @@ body.is-modal {
                     <label class="color-field"><span>Text</span><input type="color" id="lyricColor" value="#ffffff" /></label>
                     <label class="color-field"><span>Highlight</span><input type="color" id="lyricHighlight" value="#ec4899" /></label>
                     <label class="color-field"><span>Pill</span><input type="color" id="lyricPill" value="#000000" /></label>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricOpacity">Text opacity</label><output id="lyricOpacityOut">100%</output></div>
+                    <input type="range" id="lyricOpacity" min="0" max="100" step="1" value="100" />
                   </div>
                   <div class="field">
                     <div class="field-top"><label for="lyricPillOpacity">Pill opacity</label><output id="lyricPillOpacityOut">50%</output></div>
@@ -2338,6 +2389,7 @@ body.is-modal {
     <input type="file" id="fileImage" accept="image/*" hidden />
     <input type="file" id="fileVideo" accept="video/*" hidden />
     <input type="file" id="fileCover" accept="image/*" hidden />
+    <input type="file" id="fileWatermark" accept="image/*" hidden />
     <input type="file" id="fileLyrics" accept=".lrc,.srt,.vtt,.txt,text/plain,application/x-subrip" hidden />
     <input type="file" id="fileLook" accept=".json,application/json" hidden />
 
@@ -2760,6 +2812,10 @@ body.is-modal {
     credit: "",
     showCredit: true,
     dim: 0.45,
+    zoomSpeed: 1,
+    watermarkOpacity: 0.75,
+    watermarkScale: 0.12,
+    watermarkCorner: "br",
     sensitivity: 1,
     bars: 64,
     visualizerOpacity: 1,
@@ -2782,11 +2838,13 @@ body.is-modal {
       pos: "bottom",
       size: 46,
       lines: 2,
+      maxWords: 8,
       showSections: false,
       color: "#ffffff",
       highlight: "#ec4899",
       pill: "#000000",
       pillOpacity: 0.5,
+      opacity: 1,
       offset: 0
     }
   });
@@ -5238,6 +5296,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
   var TIME_TAG = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
   var WORD_TAG = /<(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?>/g;
   var META_TAG = /^\[(ti|ar|al|by|re|ve|length|offset):(.*)\]$/i;
+  var CUE_ONLY = /^[[(（【].*[\])）】]$/;
+  var CUE_INLINE = /\[[^\]]*\]|\([^)]*\)|（[^）]*）|【[^】]*】/g;
+  function withoutCues(text) {
+    return text.replace(CUE_INLINE, " ").replace(/\s+/g, " ").trim();
+  }
   var SECTION = /^[[【(]?(verse|chorus|bridge|intro|outro|pre[- ]?chorus|hook|refrain|drop|solo|break|interlude|instrumental|припев|куплет|бридж|интро|аутро)[^\]]*[\]】)]?$/i;
   function seconds(min, sec, frac) {
     const base = Number(min) * 60 + Number(sec);
@@ -5328,19 +5391,60 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (!match) continue;
       const start = cueSeconds(match[1], match[2], match[3], match[4]);
       const end = cueSeconds(match[5], match[6], match[7], match[8]);
-      const body = rows.slice(cueIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").replace(/\s+/g, " ").trim();
+      const raw = rows.slice(cueIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").trim();
+      if (!raw || CUE_ONLY.test(raw)) continue;
+      const body = withoutCues(raw);
       if (!body) continue;
       lines.push({ time: start, end, text: body, isSection: false, words: [], weight: Math.max(1, body.length) });
     }
     return lines.sort((a, b) => a.time - b.time);
   }
-  function parseLyrics(text, duration) {
-    if (SRT_CUE.test(text)) return parseSrt(text);
-    if (/\[\d{1,3}:\d{2}/.test(text)) return parseLrc(text);
-    return distributePlainText(text, duration);
+  function parseLyrics(text, duration, maxWords = 8) {
+    let lines;
+    if (SRT_CUE.test(text)) lines = parseSrt(text);
+    else if (/\[\d{1,3}:\d{2}/.test(text)) lines = parseLrc(text);
+    else lines = distributePlainText(text, duration);
+    return maxWords > 0 ? splitCues(lines, maxWords) : lines;
+  }
+  function splitCues(lines, maxWords) {
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const words = line.text.split(/\s+/).filter(Boolean);
+      if (line.isSection || words.length <= maxWords) {
+        out.push(line);
+        continue;
+      }
+      const end = line.end ?? (lines[i + 1]?.time ?? line.time + Math.max(2, words.length * 0.4));
+      const span = Math.max(0.4, end - line.time);
+      const totalChars = words.reduce((sum, word) => sum + word.length, 0) || 1;
+      let cursor = line.time;
+      for (let start = 0; start < words.length; start += maxWords) {
+        const chunk = words.slice(start, start + maxWords);
+        const chars = chunk.reduce((sum, word) => sum + word.length, 0) || 1;
+        const share = chars / totalChars * span;
+        const text = chunk.join(" ");
+        const timed = [];
+        let wordCursor = cursor;
+        for (const word of chunk) {
+          timed.push({ time: wordCursor, text: word });
+          wordCursor += word.length / chars * share;
+        }
+        out.push({
+          time: cursor,
+          end: Math.min(end, cursor + share),
+          text,
+          isSection: false,
+          words: timed,
+          weight: Math.max(1, text.length)
+        });
+        cursor += share;
+      }
+    }
+    return out;
   }
   function distributePlainText(text, duration) {
-    const raw = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
+    const raw = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0).filter((line) => !CUE_ONLY.test(line) || SECTION.test(line));
     if (raw.length === 0) return [];
     const span = Math.max(2, duration - 1.5);
     const totalWeight = raw.reduce((sum, line) => sum + Math.max(1, line.length), 0);
@@ -5348,6 +5452,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     let cursor = 0.75;
     for (const line of raw) {
       const isSection = SECTION.test(line) || /^[[【].*[\]】]$/.test(line);
+      const body = withoutCues(line);
+      if (!body) continue;
       const weight = Math.max(1, line.length);
       const share = weight / totalWeight * span;
       const words = line.split(/\s+/).filter(Boolean);
@@ -5361,7 +5467,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       });
       lines.push({
         time: cursor,
-        text: line.replace(/^[[【]|[\]】]$/g, ""),
+        text: body,
         isSection,
         words: isSection ? [] : timedWords,
         weight
@@ -5408,12 +5514,13 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const y = cfg.pos === "bottom" ? height * 0.5 - height * 0.115 : cfg.pos === "top" ? -height * 0.5 + height * 0.115 : 0;
     const pill = rgba(cfg.pill, cfg.pillOpacity);
     const family = fontFamily(cfg.font);
-    const maxWidth = width * 0.88;
-    const layout = (text, requested) => {
+    const maxWidth = width * 0.5;
+    const layout = (text, requested, maxRows) => {
       let size = Math.max(8, requested);
       let rows = [];
       let widest = 0;
-      for (let attempt = 0; attempt < 6; attempt++) {
+      const floor = Math.max(9, requested * 0.4);
+      for (let attempt = 0; attempt < 12; attempt++) {
         ctx.font = `${weight} ${size}px ${family}`;
         const words = [];
         const scan = /\S+/g;
@@ -5447,8 +5554,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
           rows.push({ text: rowText, start: rowStart, end: rowEnd });
           widest = Math.max(widest, ctx.measureText(rowText).width);
         }
-        if (widest <= maxWidth || size <= 9) break;
-        size = Math.max(9, size * (maxWidth / widest) * 0.98);
+        const fitsWidth = widest <= maxWidth;
+        if (fitsWidth && rows.length <= maxRows || size <= floor || size <= 9) break;
+        const next = rows.length > maxRows && fitsWidth ? size * 0.9 : Math.max(floor, size * (maxWidth / Math.max(widest, 1)) * 0.98);
+        size = Math.max(floor, Math.min(size * 0.98, next));
       }
       ctx.font = `${weight} ${size}px ${family}`;
       return { rows, size, widest };
@@ -5459,7 +5568,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const weight = cfg.bold === false ? 400 : 700;
     ctx.font = `${weight} ${cfg.size}px ${family}`;
     const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
-    ctx.shadowColor = `rgba(0,0,0,${(0.9 - 0.5 * glow).toFixed(3)})`;
+    const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1));
+    ctx.shadowColor = `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha).toFixed(3)})`;
     ctx.shadowBlur = Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow);
     ctx.shadowOffsetX = cfg.size * 0.04;
     ctx.shadowOffsetY = cfg.size * 0.07;
@@ -5483,7 +5593,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.shadowOffsetY = 0;
       for (const layer of glowLayers) {
         ctx.shadowBlur = size * layer.blur * glow;
-        ctx.globalAlpha = layer.alpha * glow;
+        ctx.globalAlpha = layer.alpha * glow * textAlpha;
         paint();
       }
       ctx.globalAlpha = keepAlpha;
@@ -5499,7 +5609,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
         ctx.restore();
         return;
       }
-      const { rows, size } = layout(text, cfg.size);
+      const { rows, size } = layout(text, cfg.size, Math.max(1, Math.round(cfg.lines)));
       const lineHeight = size * 1.26;
       const blockHeight = rows.length * lineHeight;
       const top = y - blockHeight / 2 + lineHeight / 2;
@@ -5518,10 +5628,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
       rows.forEach((row, i) => {
         const rowY = top + i * lineHeight;
         const rowWidth = ctx.measureText(row.text).width;
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = 0.4 * textAlpha;
         ctx.fillStyle = cfg.color;
         ctx.fillText(row.text, 0, rowY);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = textAlpha;
         const span = Math.max(1, row.end - row.start);
         const fraction = Math.min(1, Math.max(0, (progress * total - row.start) / span));
         if (fraction > 0) {
@@ -5536,10 +5646,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
       });
     } else if (cfg.style === "lines") {
       const entries = [];
-      for (let i = index; i < lines.length && entries.length < cfg.lines; i++) {
+      let budget = Math.max(1, Math.round(cfg.lines));
+      for (let i = index; i < lines.length && budget > 0; i++) {
         if (!cfg.showSections && lines[i].isSection) continue;
-        const laid = layout(lines[i].text, cfg.size);
+        const laid = layout(lines[i].text, cfg.size, budget);
         entries.push({ rows: laid.rows, size: laid.size, active: i === index });
+        budget -= laid.rows.length;
       }
       const gap = cfg.size * 0.42;
       const totalHeight = entries.reduce((sum, entry) => sum + entry.rows.length * entry.size * 1.24, 0) + gap * (entries.length - 1);
@@ -5565,7 +5677,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
             });
           });
         }
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = alpha * textAlpha;
         entry.rows.forEach((row, i) => {
           ctx.fillStyle = cfg.color;
           ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
@@ -5584,8 +5696,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
       paintGlow(cfg.size, () => {
         ctx.fillText(current.text, x, y);
       });
+      ctx.globalAlpha = textAlpha;
       ctx.fillStyle = cfg.color;
       ctx.fillText(current.text, x, y);
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   }
@@ -5711,20 +5825,46 @@ If you want to offset all timestamps of a track such that the first one is zero,
       ctx.fillText(config.credit, dw / 2 - 26, dh / 2 - 22);
       ctx.restore();
     }
+    drawWatermark(ctx, dw, dh, config, assets);
+  }
+  function drawWatermark(ctx, dw, dh, config, assets) {
+    const mark = assets.watermark;
+    if (!mark) return;
+    const strength = Math.max(0, Math.min(1, config.watermarkOpacity ?? 0));
+    if (strength <= 1e-3) return;
+    const nw = mark.naturalWidth || mark.width;
+    const nh = mark.naturalHeight || mark.height;
+    if (!nw || !nh) return;
+    const short = Math.min(dw, dh);
+    const width = short * Math.max(0.03, Math.min(0.4, config.watermarkScale ?? 0.12));
+    const height = width * (nh / nw);
+    const margin = short * 0.045;
+    const corner = config.watermarkCorner ?? "br";
+    const left = corner === "tl" || corner === "bl";
+    const top = corner === "tl" || corner === "tr";
+    const x = left ? -dw / 2 + margin : dw / 2 - margin - width;
+    const y = top ? -dh / 2 + margin : dh / 2 - margin - height;
+    ctx.save();
+    ctx.globalAlpha = strength;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(mark, x, y, width, height);
+    ctx.restore();
   }
   function drawBackground(ctx, dw, dh, t, config, assets) {
     const dim = config.dim;
+    const drift = Math.max(0, config.zoomSpeed ?? 1);
     const source = config.bg === "video" && assets.backgroundVideo ? assets.backgroundVideo : config.bg === "image" && assets.background ? assets.background : null;
     if (config.bg === "generated" || config.bg === "pattern") {
       ctx.save();
-      const zoom = 1.06 + Math.sin(t * 0.11) * 0.045;
+      const zoom = drift <= 0 ? 1 : 1.06 + Math.sin(t * 0.11 * drift) * 0.045;
       ctx.scale(zoom, zoom);
       const archetype = config.bg === "pattern" ? config.pattern : void 0;
       drawGeneratedBackground(ctx, dw, dh, t, config.bgSeed, config.primary, config.secondary, archetype);
       ctx.restore();
     } else if (source) {
       ctx.save();
-      const zoom = 1.06 + Math.sin(t * 0.18) * 0.035;
+      ctx.imageSmoothingQuality = "high";
+      const zoom = drift <= 0 ? 1 : 1.06 + Math.sin(t * 0.18 * drift) * 0.035;
       ctx.scale(zoom, zoom);
       drawCover(ctx, source, 0, 0, dw, dh);
       ctx.restore();
@@ -6497,6 +6637,19 @@ If you want to offset all timestamps of a track such that the first one is zero,
   function bitrateFor(width, height, fps, quality) {
     return Math.round(width * height * fps * 0.12 * Math.max(0.4, quality));
   }
+  function renderSeconds(config, songDuration) {
+    if (!songDuration) return 0;
+    const start = Math.max(0, Math.min(songDuration - 0.1, config.rangeStart || 0));
+    const wantedEnd = config.rangeEnd && config.rangeEnd > start ? config.rangeEnd : songDuration;
+    const end = Math.max(start + 0.2, Math.min(songDuration, wantedEnd));
+    return Math.max(0.2, end - start);
+  }
+  function estimateSizeMB(config, seconds2) {
+    if (!seconds2) return 0;
+    const { width, height } = frameSize(config);
+    const videoKbps = bitrateFor(width, height, config.fps, config.quality) / 1e3;
+    return (videoKbps + config.audioKbps) * seconds2 / 8 / 1024;
+  }
   var abortError = () => new DOMException("The render was cancelled.", "AbortError");
   function throwIfAborted(signal) {
     if (signal?.aborted) throw abortError();
@@ -6873,6 +7026,15 @@ If you want to offset all timestamps of a track such that the first one is zero,
   }
   var PIXABAY_PHOTOS = "https://pixabay.com/api/";
   var PIXABAY_VIDEOS = "https://pixabay.com/api/videos/";
+  function renditionSize(hit, url2) {
+    const ow = hit.imageWidth ?? 0;
+    const oh = hit.imageHeight ?? 0;
+    if (!ow || !oh || !url2) return { width: ow, height: oh };
+    if (hit.imageURL && url2 === hit.imageURL) return { width: ow, height: oh };
+    const cap = hit.fullHDURL && url2 === hit.fullHDURL ? 1920 : hit.largeImageURL && url2 === hit.largeImageURL ? 1280 : 640;
+    const scale = Math.min(1, cap / Math.max(ow, oh));
+    return { width: Math.round(ow * scale), height: Math.round(oh * scale) };
+  }
   async function searchPixabay(query, kind, key, limit = 24, signal) {
     if (!key.trim()) throw new Error("Pixabay needs an API key.");
     const params = new URLSearchParams({
@@ -6902,7 +7064,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const author = (hit.user ?? "Pixabay contributor").trim();
       const title = (hit.tags ?? "Pixabay media").split(",").slice(0, 3).join(", ").trim();
       if (kind === "photo") {
-        const full = hit.largeImageURL ?? hit.webformatURL;
+        const full = hit.imageURL ?? hit.fullHDURL ?? hit.largeImageURL ?? hit.webformatURL;
         const thumb = hit.webformatURL ?? hit.previewURL;
         if (!full || !thumb) continue;
         items.push({
@@ -6912,8 +7074,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
           source: "pixabay",
           thumb,
           full,
-          width: hit.imageWidth ?? 0,
-          height: hit.imageHeight ?? 0,
+          ...renditionSize(hit, full),
           license: "Pixabay Content License",
           author,
           page: hit.pageURL ?? "https://pixabay.com/"
@@ -7777,7 +7938,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     config: defaultConfig(),
     song: null,
     lyrics: [],
-    assets: { cover: null, background: null, backgroundVideo: null },
+    assets: { cover: null, background: null, backgroundVideo: null, watermark: null },
     activeTextId: "title",
     customCover: null,
     generatedCover: null,
@@ -7791,6 +7952,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     lastTextSig: "",
     lastExportUrl: "",
     backgroundCredit: "",
+    backgroundPage: "",
     centreCredit: "",
     lastExportName: "",
     lastExportPath: "",
@@ -7966,6 +8128,21 @@ If you want to offset all timestamps of a track such that the first one is zero,
       play.setAttribute("aria-label", playback.playing ? "Pause" : "Play");
     }
   }
+  function qualityLabel(quality) {
+    return quality <= 0.75 ? "Small" : quality <= 1 ? "Balanced" : "High";
+  }
+  function syncSizeEstimate() {
+    const el = document.querySelector("#qualitySize");
+    if (!el) return;
+    const seconds2 = renderSeconds(state.config, state.song?.duration ?? 0);
+    if (!state.song || !seconds2) {
+      el.textContent = "Estimated file: load a song to see the size.";
+      return;
+    }
+    const mb = estimateSizeMB(state.config, seconds2);
+    const size = mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : mb >= 100 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
+    el.textContent = `Estimated file: ~${size} (${Math.round(seconds2)} s)`;
+  }
   function syncChrome() {
     const config = state.config;
     const size = frameSize(config);
@@ -7984,15 +8161,20 @@ If you want to offset all timestamps of a track such that the first one is zero,
     if (lyricStatus) lyricStatus.textContent = count || "No lyrics loaded";
     const values = {
       "#particlesOut": String(config.particles),
-      "#qualityOut": config.quality <= 0.75 ? "Small" : config.quality <= 1 ? "Balanced" : "High",
+      "#qualityOut": `${Math.round(config.quality * 100)}% \xB7 ${qualityLabel(config.quality)}`,
       "#dimOut": `${Math.round(config.dim * 100)}%`,
+      "#zoomSpeedOut": config.zoomSpeed <= 0 ? "Off" : `${config.zoomSpeed}x`,
+      "#waterScaleOut": `${Math.round(config.watermarkScale * 100)}%`,
+      "#waterOpacityOut": `${Math.round(config.watermarkOpacity * 100)}%`,
       "#sensitivityOut": `${Math.round(config.sensitivity * 100)}%`,
       "#barsOut": String(Math.round(config.bars)),
       "#scaleOut": `${Math.round(config.scale * 100)}%`,
       "#opacityOut": `${Math.round(config.visualizerOpacity * 100)}%`,
       "#lyricSizeOut": String(Math.round(config.lyrics.size)),
-      "#lyricLinesOut": String(config.lyrics.lines),
+      "#lyricLinesOut": String(Math.round(config.lyrics.lines)),
+      "#lyricWordsOut": String(Math.round(config.lyrics.maxWords)),
       "#lyricOffsetOut": `${config.lyrics.offset.toFixed(1)} s`,
+      "#lyricOpacityOut": `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
       "#lyricPillOpacityOut": `${Math.round(config.lyrics.pillOpacity * 100)}%`,
       "#lyricGlowOut": `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
       "#primaryHex": config.primary.toUpperCase(),
@@ -8020,13 +8202,22 @@ If you want to offset all timestamps of a track such that the first one is zero,
     setRange("#particles", config.particles);
     setRange("#quality", Math.round(config.quality * 100));
     setRange("#dim", Math.round(config.dim * 100));
+    setRange("#zoomSpeed", Math.round(config.zoomSpeed * 100));
+    setRange("#waterScale", Math.round(config.watermarkScale * 100));
+    setRange("#waterOpacity", Math.round(config.watermarkOpacity * 100));
+    const cornerSelect = document.querySelector("#waterCorner");
+    if (cornerSelect && document.activeElement !== cornerSelect) cornerSelect.value = config.watermarkCorner;
+    refreshWatermark();
+    syncSizeEstimate();
     setRange("#sensitivity", Math.round(config.sensitivity * 100));
     setRange("#bars", Math.round(config.bars));
     setRange("#scale", Math.round(config.scale * 100));
     setRange("#opacity", Math.round(config.visualizerOpacity * 100));
     setRange("#lyricSize", Math.round(config.lyrics.size));
     setRange("#lyricLines", config.lyrics.lines);
+    setRange("#lyricWords", config.lyrics.maxWords);
     setRange("#lyricOffset", Math.round(config.lyrics.offset * 10));
+    setRange("#lyricOpacity", Math.round((config.lyrics.opacity ?? 1) * 100));
     setRange("#lyricPillOpacity", Math.round(config.lyrics.pillOpacity * 100));
     setRange("#lyricGlow", Math.round((config.lyrics.glow ?? 0) * 100));
     setRange("#seekRange", 0);
@@ -8222,6 +8413,22 @@ If you want to offset all timestamps of a track such that the first one is zero,
       note.textContent = "A deep black frame with a faint glow behind the visualizer.";
     }
     host.appendChild(note);
+    if ((config.bg === "image" || config.bg === "video") && state.backgroundPage) {
+      const source = document.createElement("a");
+      source.className = "bg-source";
+      source.href = state.backgroundPage;
+      source.textContent = state.backgroundPage;
+      source.target = "_blank";
+      source.rel = "noreferrer";
+      source.title = "Open the source page to download the highest-resolution file";
+      source.addEventListener("click", (event) => {
+        const bridge = window.pywebview;
+        if (!bridge?.api?.open_url) return;
+        event.preventDefault();
+        void bridge.api.open_url(state.backgroundPage);
+      });
+      host.appendChild(source);
+    }
     if (config.credit.trim()) {
       const credit = document.createElement("p");
       credit.className = "bg-note credit";
@@ -8308,6 +8515,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     state.useGeneratedArt = false;
     state.assets.cover = null;
     state.backgroundCredit = "";
+    state.backgroundPage = "";
     state.centreCredit = "";
     state.config.rangeStart = 0;
     state.config.rangeEnd = 0;
@@ -8385,6 +8593,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
         state.config.rangeStart = 0;
         state.config.rangeEnd = 0;
         state.backgroundCredit = "";
+        state.backgroundPage = "";
         state.centreCredit = "";
         state.config.primary = palette.primary;
         state.config.secondary = palette.secondary;
@@ -8422,6 +8631,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
         state.config.bg = "image";
       });
       state.backgroundCredit = "";
+      state.backgroundPage = "";
       syncCredit();
       toast("Background image ready.");
     } catch (error) {
@@ -8436,6 +8646,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
         state.config.bg = "video";
       });
       state.backgroundCredit = "";
+      state.backgroundPage = "";
       syncCredit();
       toast("Background video ready \u2014 it loops for the whole song.");
     } catch (error) {
@@ -8454,9 +8665,30 @@ If you want to offset all timestamps of a track such that the first one is zero,
       toast(error instanceof Error ? error.message : "That image could not be read.", "err");
     }
   }
+  async function loadWatermarkImage(file) {
+    try {
+      state.assets.watermark = await loadImageFile(file);
+      commit(() => {
+      });
+      refreshWatermark();
+      toast("Watermark added.");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "That image could not be read.", "err");
+    }
+  }
+  function refreshWatermark() {
+    const thumb = document.querySelector("#waterThumb");
+    const note = document.querySelector("#waterNote");
+    const mark = state.assets.watermark;
+    if (thumb) {
+      thumb.style.backgroundImage = mark ? `url("${mark.src}")` : "none";
+      thumb.classList.toggle("is-empty", !mark);
+    }
+    if (note) note.textContent = mark ? "Mark ready \u2014 drawn on top of the frame." : "No mark yet";
+  }
   function applyLyricText(text) {
     const duration = state.song?.duration ?? 0;
-    const lines = parseLyrics(text, duration);
+    const lines = parseLyrics(text, duration, state.config.lyrics.maxWords);
     if (lines.length === 0) {
       toast("No lyric lines found in that text.", "err");
       return;
@@ -8876,10 +9108,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
     $("#rangeStart").addEventListener("input", (event) => {
       state.config.rangeStart = Math.max(0, Number(event.target.value) || 0);
       state.version += 1;
+      syncSizeEstimate();
     });
     $("#rangeEnd").addEventListener("input", (event) => {
       state.config.rangeEnd = Math.max(0, Number(event.target.value) || 0);
       state.version += 1;
+      syncSizeEstimate();
     });
     $("#btnRangePlayhead").addEventListener("click", () => {
       if (!state.song) return;
@@ -8893,7 +9127,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.config.quality = value;
       state.version += 1;
       const out = document.querySelector("#qualityOut");
-      if (out) out.textContent = value <= 0.75 ? "Small" : value <= 1 ? "Balanced" : "High";
+      if (out) out.textContent = `${Math.round(value * 100)}% \xB7 ${qualityLabel(value)}`;
+      syncSizeEstimate();
     });
     $("#dim").addEventListener("input", (event) => {
       const value = Number(event.target.value) / 100;
@@ -8901,6 +9136,13 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.version += 1;
       const out = document.querySelector("#dimOut");
       if (out) out.textContent = `${Math.round(value * 100)}%`;
+    });
+    $("#zoomSpeed").addEventListener("input", (event) => {
+      const value = Number(event.target.value) / 100;
+      state.config.zoomSpeed = value;
+      state.version += 1;
+      const out = document.querySelector("#zoomSpeedOut");
+      if (out) out.textContent = value <= 0 ? "Off" : `${value}x`;
     });
     $("#scale").addEventListener("input", (event) => {
       const value = Number(event.target.value) / 100;
@@ -8938,6 +9180,38 @@ If you want to offset all timestamps of a track such that the first one is zero,
     });
     bindColor("#lyricPill", (value) => {
       state.config.lyrics.pill = value;
+    });
+    $("#btnWater").addEventListener("click", () => $("#fileWatermark").click());
+    $("#fileWatermark").addEventListener("change", (event) => {
+      const input = event.target;
+      const file = input.files?.[0];
+      if (file) void loadWatermarkImage(file);
+      input.value = "";
+    });
+    $("#btnWaterClear").addEventListener("click", () => {
+      state.assets.watermark = null;
+      commit(() => {
+      });
+      refreshWatermark();
+      toast("Watermark removed.");
+    });
+    $("#waterScale").addEventListener("input", (event) => {
+      const value = Number(event.target.value) / 100;
+      state.config.watermarkScale = value;
+      state.version += 1;
+      const out = document.querySelector("#waterScaleOut");
+      if (out) out.textContent = `${Math.round(value * 100)}%`;
+    });
+    $("#waterOpacity").addEventListener("input", (event) => {
+      const value = Number(event.target.value) / 100;
+      state.config.watermarkOpacity = value;
+      state.version += 1;
+      const out = document.querySelector("#waterOpacityOut");
+      if (out) out.textContent = `${Math.round(value * 100)}%`;
+    });
+    $("#waterCorner").addEventListener("change", (event) => {
+      state.config.watermarkCorner = event.target.value;
+      state.version += 1;
     });
     $("#btnCover").addEventListener("click", () => $("#fileCover").click());
     $("#btnCoverLibrary").addEventListener("click", () => picker?.open("photo", "center"));
@@ -9019,6 +9293,15 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const out = document.querySelector("#lyricLinesOut");
       if (out) out.textContent = String(state.config.lyrics.lines);
     });
+    $("#lyricWords").addEventListener("input", (event) => {
+      const value = Math.max(3, Math.round(Number(event.target.value) || 8));
+      state.config.lyrics.maxWords = value;
+      state.version += 1;
+      const out = document.querySelector("#lyricWordsOut");
+      if (out) out.textContent = String(value);
+      const area = document.querySelector("#lyricText");
+      if (area && area.value.trim() && state.song) applyLyricText(area.value);
+    });
     $("#lyricOffset").addEventListener("input", (event) => {
       state.config.lyrics.offset = Number(event.target.value) / 10;
       state.version += 1;
@@ -9033,6 +9316,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.config.lyrics.glow = Number(event.target.value) / 100;
       const out = document.querySelector("#lyricGlowOut");
       if (out) out.textContent = `${event.target.value}%`;
+      state.version += 1;
+    });
+    $("#lyricOpacity").addEventListener("input", (event) => {
+      state.config.lyrics.opacity = Number(event.target.value) / 100;
+      const out = document.querySelector("#lyricOpacityOut");
+      if (out) out.textContent = `${Math.round(state.config.lyrics.opacity * 100)}%`;
       state.version += 1;
     });
     $("#lyricPillOpacity").addEventListener("input", (event) => {
@@ -9209,6 +9498,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
           commit(() => {
             state.config.bg = "image";
             state.backgroundCredit = creditLine(item);
+            state.backgroundPage = item.page;
             state.config.showCredit = true;
           });
           syncCredit();
@@ -9227,6 +9517,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
           commit(() => {
             state.config.bg = "video";
             state.backgroundCredit = creditLine(item);
+            state.backgroundPage = item.page;
             state.config.showCredit = true;
           });
           syncCredit();

@@ -683,6 +683,17 @@ input[type="color"]::-webkit-color-swatch {
   flex: none;
 }
 
+.bg-source {
+  display: block;
+  font-size: 10.5px;
+  color: var(--accent);
+  line-height: 1.45;
+  margin: 4px 0 0;
+  word-break: break-all;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .bg-note {
   font-size: 10.5px;
   color: var(--faint);

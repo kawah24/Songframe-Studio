@@ -361,6 +361,104 @@ check(
 );
 check(newFx.zoomAmount, 'kick zoom intensity changes the punch');
 
+// the background drift is rate-controlled, and the rate must reach the picture
+const drift = await page.evaluate(() => {
+  const { duration: _duration, ...before } = window.songframe.getState();
+  const render = (speed, t) => {
+    window.songframe.setConfig({ ...before, preset: 'Minimal', bg: 'generated', particles: 0, text: [], zoomSpeed: speed });
+    window.songframe.drawAt(t);
+    return document.querySelector('#preview').toDataURL('image/png');
+  };
+  const same = render(1, 2);
+  const result = {
+    deterministic: same === render(1, 2),
+    speedMatters: same !== render(4, 2),
+    frozenDiffers: same !== render(0, 2),
+  };
+  window.songframe.setConfig(before);
+  return result;
+});
+check(drift.deterministic, 'a fixed time renders the same frame', JSON.stringify(drift));
+check(drift.speedMatters, 'zoom speed changes the background drift');
+check(drift.frozenDiffers, 'zoom speed 0 freezes the drift');
+
+check(await page.locator('#zoomSpeed').count() === 1, 'zoom speed slider is listed');
+const driftLabels = await page.evaluate(() => {
+  const el = document.querySelector('#zoomSpeed');
+  const out = document.querySelector('#zoomSpeedOut');
+  const read = (v) => {
+    el.value = String(v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return out.textContent;
+  };
+  const labels = [read(0), read(100), read(400)];
+  read(100);
+  return labels;
+});
+check(
+  driftLabels[0] === 'Off' && driftLabels[1] === '1x' && driftLabels[2] === '4x',
+  'zoom speed reads Off / 1x / 4x',
+  driftLabels.join(' '),
+);
+
+// watermark: size, opacity and corner, and they must reach the config
+check(await page.locator('#waterScale').count() === 1, 'watermark size slider is listed');
+const water = await page.evaluate(() => {
+  const set = (sel, v, evt = 'input') => {
+    const el = document.querySelector(sel);
+    el.value = String(v);
+    el.dispatchEvent(new Event(evt, { bubbles: true }));
+  };
+  set('#waterScale', 20);
+  set('#waterOpacity', 40);
+  const corner = document.querySelector('#waterCorner');
+  corner.value = 'tl';
+  corner.dispatchEvent(new Event('change', { bubbles: true }));
+  const s = window.songframe.getState();
+  const out = { scale: s.watermarkScale, opacity: s.watermarkOpacity, corner: s.watermarkCorner };
+  set('#waterScale', 12);
+  set('#waterOpacity', 75);
+  corner.value = 'br';
+  corner.dispatchEvent(new Event('change', { bubbles: true }));
+  return out;
+});
+check(
+  Math.abs(water.scale - 0.2) < 1e-6 && Math.abs(water.opacity - 0.4) < 1e-6 && water.corner === 'tl',
+  'watermark size, opacity and corner reach the config',
+  JSON.stringify(water),
+);
+
+const qualityOut = (await page.textContent('#qualityOut')) ?? '';
+check(qualityOut.includes('%'), 'video quality reads as a percentage', qualityOut);
+const estimate = (await page.textContent('#qualitySize')) ?? '';
+check(estimate.includes('MB') || estimate.includes('GB'), 'file size estimate is shown once a song is loaded', estimate);
+
+// a sound cue is not a lyric line
+const cueStatus = await page.evaluate(() => {
+  const area = document.querySelector('#lyricText');
+  const before = area.value;
+  area.value = '[Music]\nHello there, this is a line of words';
+  document.querySelector('#btnDistribute').click();
+  const status = document.querySelector('#lyricStatus').textContent ?? '';
+  area.value = before;
+  document.querySelector('#btnDistribute').click();
+  return status;
+});
+check(cueStatus.includes('1 lyric lines'), 'a [Music] cue is dropped from the lyrics', cueStatus);
+
+// long cues are cut into ~8-word lines instead of being shrunk or clipped
+const splitStatus = await page.evaluate(() => {
+  const area = document.querySelector('#lyricText');
+  const before = area.value;
+  area.value = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen';
+  document.querySelector('#btnDistribute').click();
+  const status = document.querySelector('#lyricStatus').textContent ?? '';
+  area.value = before;
+  document.querySelector('#btnDistribute').click();
+  return status;
+});
+check(splitStatus.includes('3 lyric lines'), 'long cues are split into ~8-word lines', splitStatus);
+
 // type is composed above the effect stack, so effects must not move or scale it
 const typeUnderFx = await page.evaluate(() => {
   const keys = ['shake', 'glitch', 'vhs', 'cctv', 'scanlines', 'chromatic', 'bloom', 'grain', 'pixelate', 'strobe', 'vignette', 'hue', 'letterbox', 'zoom', 'kaleidoscope', 'leak'];
@@ -594,6 +692,68 @@ const cleanPreset = await page.evaluate(() => {
 });
 check(cleanPreset.off === 1, 'clean preset draws nothing but the backdrop', JSON.stringify(cleanPreset));
 check(cleanPreset.on > 20, 'clean preset still draws particles', JSON.stringify(cleanPreset));
+
+// lyric text opacity must actually fade the letters
+const lyricOpacity = await page.evaluate(() => {
+  const slider = document.querySelector('#lyricOpacity');
+  const out = document.querySelector('#lyricOpacityOut');
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const shot = (opacity) => {
+    window.songframe.setConfig({
+      preset: 'Minimal',
+      bg: 'solid',
+      particles: 0,
+      text: [],
+      effects: {},
+      lyrics: {
+        ...window.songframe.getState().lyrics,
+        enabled: true,
+        style: 'lines',
+        color: '#ffffff',
+        highlight: '#ec4899',
+        pillOpacity: 0,
+        glow: 0,
+        size: 64,
+        opacity,
+      },
+    });
+    window.songframe.drawAt(4);
+    const { width: w, height: h } = canvas;
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let lit = 0;
+    let peak = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const v = Math.max(data[i], data[i + 1], data[i + 2]);
+      if (v > 60) lit += 1;
+      if (v > peak) peak = v;
+    }
+    return { lit, peak };
+  };
+  const full = shot(1);
+  const faded = shot(0.35);
+  const gone = shot(0);
+  if (slider) {
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  const wired = { value: window.songframe.getState().lyrics.opacity, label: out ? out.textContent : null };
+  if (slider) {
+    slider.value = '100';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  return { slider: Boolean(slider), full, faded, gone, wired };
+});
+check(
+  lyricOpacity.slider && lyricOpacity.wired.value === 0.4 && lyricOpacity.wired.label === '40%',
+  'lyrics have a text opacity slider',
+  JSON.stringify(lyricOpacity.wired),
+);
+check(
+  lyricOpacity.full.peak > 200 && lyricOpacity.faded.peak < 140 && lyricOpacity.gone.lit === 0,
+  'lyric text opacity fades the type',
+  JSON.stringify({ full: lyricOpacity.full, faded: lyricOpacity.faded, gone: lyricOpacity.gone }),
+);
 check(glowProbe.lyricOff !== glowProbe.lyricOn, 'lyric glow changes the frame');
 check((await page.locator('#lyricGlow').count()) === 1, 'lyrics have a glow slider');
 

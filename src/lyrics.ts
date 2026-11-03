@@ -5,6 +5,16 @@ import { fontFamily } from './fonts';
 const TIME_TAG = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
 const WORD_TAG = /<(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?>/g;
 const META_TAG = /^\[(ti|ar|al|by|re|ve|length|offset):(.*)\]$/i;
+/** A whole cue that is only a sound description: [Music], (Applause), 【掌声】. */
+const CUE_ONLY = /^[[(（【].*[\])）】]$/;
+/** A bracketed aside inside a line: "hello [laughs] there". */
+const CUE_INLINE = /\[[^\]]*\]|\([^)]*\)|（[^）]*）|【[^】]*】/g;
+
+/** Drops the asides, keeps the words. */
+function withoutCues(text: string): string {
+  return text.replace(CUE_INLINE, ' ').replace(/\s+/g, ' ').trim();
+}
+
 const SECTION = /^[[【(]?(verse|chorus|bridge|intro|outro|pre[- ]?chorus|hook|refrain|drop|solo|break|interlude|instrumental|припев|куплет|бридж|интро|аутро)[^\]]*[\]】)]?$/i;
 
 function seconds(min: string, sec: string, frac?: string): number {
@@ -115,13 +125,14 @@ export function parseSrt(text: string): LyricLine[] {
     if (!match) continue;
     const start = cueSeconds(match[1], match[2], match[3], match[4]);
     const end = cueSeconds(match[5], match[6], match[7], match[8]);
-    const body = rows
+    const raw = rows
       .slice(cueIndex + 1)
       .join(' ')
       .replace(/<[^>]+>/g, '')
       .replace(/\{\\[^}]*\}/g, '')
-      .replace(/\s+/g, ' ')
       .trim();
+    if (!raw || CUE_ONLY.test(raw)) continue;
+    const body = withoutCues(raw);
     if (!body) continue;
     lines.push({ time: start, end, text: body, isSection: false, words: [], weight: Math.max(1, body.length) });
   }
@@ -129,10 +140,54 @@ export function parseSrt(text: string): LyricLine[] {
 }
 
 /** LRC, SRT or plain text — whichever the file turns out to be. */
-export function parseLyrics(text: string, duration: number): LyricLine[] {
-  if (SRT_CUE.test(text)) return parseSrt(text);
-  if (/\[\d{1,3}:\d{2}/.test(text)) return parseLrc(text);
-  return distributePlainText(text, duration);
+export function parseLyrics(text: string, duration: number, maxWords = 8): LyricLine[] {
+  let lines: LyricLine[];
+  if (SRT_CUE.test(text)) lines = parseSrt(text);
+  else if (/\[\d{1,3}:\d{2}/.test(text)) lines = parseLrc(text);
+  else lines = distributePlainText(text, duration);
+  return maxWords > 0 ? splitCues(lines, maxWords) : lines;
+}
+
+/**
+ * Longer cues are cut into shorter ones, time shared by character count, so a
+ * caption stays readable instead of being shrunk or clipped to fit.
+ */
+function splitCues(lines: LyricLine[], maxWords: number): LyricLine[] {
+  const out: LyricLine[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const words = line.text.split(/\s+/).filter(Boolean);
+    if (line.isSection || words.length <= maxWords) {
+      out.push(line);
+      continue;
+    }
+    const end = line.end ?? (lines[i + 1]?.time ?? line.time + Math.max(2, words.length * 0.4));
+    const span = Math.max(0.4, end - line.time);
+    const totalChars = words.reduce((sum, word) => sum + word.length, 0) || 1;
+    let cursor = line.time;
+    for (let start = 0; start < words.length; start += maxWords) {
+      const chunk = words.slice(start, start + maxWords);
+      const chars = chunk.reduce((sum, word) => sum + word.length, 0) || 1;
+      const share = (chars / totalChars) * span;
+      const text = chunk.join(' ');
+      const timed: LyricLine['words'] = [];
+      let wordCursor = cursor;
+      for (const word of chunk) {
+        timed.push({ time: wordCursor, text: word });
+        wordCursor += (word.length / chars) * share;
+      }
+      out.push({
+        time: cursor,
+        end: Math.min(end, cursor + share),
+        text,
+        isSection: false,
+        words: timed,
+        weight: Math.max(1, text.length),
+      });
+      cursor += share;
+    }
+  }
+  return out;
 }
 
 /** Spreads pasted, untimed lyrics evenly across the song. */
@@ -140,7 +195,10 @@ export function distributePlainText(text: string, duration: number): LyricLine[]
   const raw = text
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .filter((line) => line.length > 0)
+    // "[Music]" and friends are cues, not lyrics: they are never shown. Real
+    // section markers ("[Verse 1]") stay, so the section feature keeps working.
+    .filter((line) => !CUE_ONLY.test(line) || SECTION.test(line));
   if (raw.length === 0) return [];
 
   const span = Math.max(2, duration - 1.5);
@@ -150,6 +208,8 @@ export function distributePlainText(text: string, duration: number): LyricLine[]
 
   for (const line of raw) {
     const isSection = SECTION.test(line) || /^[[【].*[\]】]$/.test(line);
+    const body = withoutCues(line);
+    if (!body) continue;
     const weight = Math.max(1, line.length);
     const share = (weight / totalWeight) * span;
     const words = line.split(/\s+/).filter(Boolean);
@@ -163,7 +223,7 @@ export function distributePlainText(text: string, duration: number): LyricLine[]
     });
     lines.push({
       time: cursor,
-      text: line.replace(/^[[【]|[\]】]$/g, ''),
+      text: body,
       isSection,
       words: isSection ? [] : timedWords,
       weight,
@@ -237,16 +297,18 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   const y = cfg.pos === 'bottom' ? height * 0.5 - height * 0.115 : cfg.pos === 'top' ? -height * 0.5 + height * 0.115 : 0;
   const pill = rgba(cfg.pill, cfg.pillOpacity);
   const family = fontFamily(cfg.font);
-  const maxWidth = width * 0.88;
+  // Half the frame: a caption is a subtitle, not a headline across the picture.
+  const maxWidth = width * 0.5;
 
   // Words wrap onto new rows, and only a single word that still cannot fit
   // shrinks the type. Rows carry their character range so the karaoke sweep
   // keeps running across the wrap.
-  const layout = (text: string, requested: number): { rows: LyricRow[]; size: number; widest: number } => {
+  const layout = (text: string, requested: number, maxRows: number): { rows: LyricRow[]; size: number; widest: number } => {
     let size = Math.max(8, requested);
     let rows: LyricRow[] = [];
     let widest = 0;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    const floor = Math.max(9, requested * 0.4);
+    for (let attempt = 0; attempt < 12; attempt++) {
       ctx.font = `${weight} ${size}px ${family}`;
       const words: { text: string; start: number }[] = [];
       const scan = /\S+/g;
@@ -280,9 +342,16 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
         rows.push({ text: rowText, start: rowStart, end: rowEnd });
         widest = Math.max(widest, ctx.measureText(rowText).width);
       }
-      if (widest <= maxWidth || size <= 9) break;
-      size = Math.max(9, size * (maxWidth / widest) * 0.98);
+      const fitsWidth = widest <= maxWidth;
+      if ((fitsWidth && rows.length <= maxRows) || size <= floor || size <= 9) break;
+      const next =
+        rows.length > maxRows && fitsWidth
+          ? size * 0.9
+          : Math.max(floor, size * (maxWidth / Math.max(widest, 1)) * 0.98);
+      size = Math.max(floor, Math.min(size * 0.98, next));
     }
+    // Nothing is ever cut: if the cue still needs another row at the smallest
+    // size, it gets it. Shorter cues are what keeps that from happening.
     ctx.font = `${weight} ${size}px ${family}`;
     return { rows, size, widest };
   };
@@ -293,9 +362,11 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   const weight = cfg.bold === false ? 400 : 700;
   ctx.font = `${weight} ${cfg.size}px ${family}`;
   const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+  // Text opacity fades the letters, their drop shadow and the glow together.
+  const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1));
   // The black drop shadow is painted over the glow, so ease it back as the glow
   // comes up, otherwise the halo is smothered before it can be seen.
-  ctx.shadowColor = `rgba(0,0,0,${(0.9 - 0.5 * glow).toFixed(3)})`;
+  ctx.shadowColor = `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha).toFixed(3)})`;
   ctx.shadowBlur = Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow);
   ctx.shadowOffsetX = cfg.size * 0.04;
   ctx.shadowOffsetY = cfg.size * 0.07;
@@ -322,7 +393,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
     ctx.shadowOffsetY = 0;
     for (const layer of glowLayers) {
       ctx.shadowBlur = size * layer.blur * glow;
-      ctx.globalAlpha = layer.alpha * glow;
+      ctx.globalAlpha = layer.alpha * glow * textAlpha;
       paint();
     }
     ctx.globalAlpha = keepAlpha;
@@ -340,7 +411,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       ctx.restore();
       return;
     }
-    const { rows, size } = layout(text, cfg.size);
+    const { rows, size } = layout(text, cfg.size, Math.max(1, Math.round(cfg.lines)));
     const lineHeight = size * 1.26;
     const blockHeight = rows.length * lineHeight;
     const top = y - blockHeight / 2 + lineHeight / 2;
@@ -362,10 +433,10 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
     rows.forEach((row, i) => {
       const rowY = top + i * lineHeight;
       const rowWidth = ctx.measureText(row.text).width;
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.4 * textAlpha;
       ctx.fillStyle = cfg.color;
       ctx.fillText(row.text, 0, rowY);
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = textAlpha;
       const span = Math.max(1, row.end - row.start);
       const fraction = Math.min(1, Math.max(0, (progress * total - row.start) / span));
       if (fraction > 0) {
@@ -380,10 +451,14 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
     });
   } else if (cfg.style === 'lines') {
     const entries: { rows: LyricRow[]; size: number; active: boolean }[] = [];
-    for (let i = index; i < lines.length && entries.length < cfg.lines; i++) {
+    // "Visible lines" is a budget of drawn rows: the active cue takes what it
+    // needs (up to the budget) and the next ones only get the remainder.
+    let budget = Math.max(1, Math.round(cfg.lines));
+    for (let i = index; i < lines.length && budget > 0; i++) {
       if (!cfg.showSections && lines[i].isSection) continue;
-      const laid = layout(lines[i].text, cfg.size);
+      const laid = layout(lines[i].text, cfg.size, budget);
       entries.push({ rows: laid.rows, size: laid.size, active: i === index });
+      budget -= laid.rows.length;
     }
     const gap = cfg.size * 0.42;
     const totalHeight = entries.reduce((sum, entry) => sum + entry.rows.length * entry.size * 1.24, 0) + gap * (entries.length - 1);
@@ -409,7 +484,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
           });
         });
       }
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = alpha * textAlpha;
       entry.rows.forEach((row, i) => {
         ctx.fillStyle = cfg.color;
         ctx.fillText(row.text, 0, cursor + lineHeight / 2 + i * lineHeight);
@@ -429,8 +504,10 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       ctx.fillText(current.text, x, y);
     });
 
+    ctx.globalAlpha = textAlpha;
     ctx.fillStyle = cfg.color;
     ctx.fillText(current.text, x, y);
+    ctx.globalAlpha = 1;
   }
 
   ctx.restore();
