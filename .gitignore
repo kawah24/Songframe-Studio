@@ -7,3 +7,6 @@ tools/out/
 releases/
 *.log
 *.prev.exe
+
+__pycache__/
+*.pyc

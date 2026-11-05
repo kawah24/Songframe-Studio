@@ -160,3 +160,8 @@ songframe.drawAt(12.4)                  // hold a preview frame at 12.4 s
 songframe.getFrame(12.4)                // bands, wave stats, bass/mid/treble
 await songframe.exportVideo({ height: 480, fps: 24, maxSeconds: 3 })
 ```
+
+## License
+
+MIT - see [LICENSE](LICENSE). Parts of the Video Maker derive from
+[YuE2-Studio](https://github.com/timoncool/YuE2-Studio) by Ilya Timonin, also MIT.
