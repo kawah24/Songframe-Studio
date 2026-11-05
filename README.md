@@ -4,6 +4,14 @@ A standalone song-to-video visualizer. Drop in a track, design the look, render 
 
 The Video Maker from [YuE2-Studio](https://github.com/timoncool/YuE2-Studio) rebuilt as an independent tool: same ten visualizer presets and the same four-panel workflow, none of the music-generation stack.
 
+## Screenshots
+
+| Presets and canvas | Effects stack |
+|---|---|
+| ![Presets and canvas](docs/shot-presets.jpg) | ![Effects stack](docs/shot-effects.jpg) |
+
+![Text layers and lyrics](docs/shot-text.jpg)
+
 ## Run it
 
 Two builds of the same studio, sharing one engine.
