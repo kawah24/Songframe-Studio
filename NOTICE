@@ -1,0 +1,11 @@
+Songframe Studio
+
+This project is an independent rebuild of the Video Maker from YuE2-Studio.
+
+  YuE2-Studio - https://github.com/timoncool/YuE2-Studio
+  Copyright (c) 2025-2026 Ilya Timonin (Neral Dreming)
+  MIT License
+
+The visualizer presets and the four-panel workflow follow that project; the
+music-generation stack is not included. The upstream MIT permission notice is
+the same text as in LICENSE above, and both copyright holders are covered by it.
