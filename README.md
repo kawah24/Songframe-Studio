@@ -161,6 +161,11 @@ songframe.getFrame(12.4)                // bands, wave stats, bass/mid/treble
 await songframe.exportVideo({ height: 480, fps: 24, maxSeconds: 3 })
 ```
 
+## Support
+
+If this saves you time, you can [buy me a coffee on Ko-fi](https://ko-fi.com/rockhouse).
+No account, no nag screen — the tool stays free and MIT either way.
+
 ## License
 
 MIT - see [LICENSE](LICENSE). Parts of the Video Maker derive from
