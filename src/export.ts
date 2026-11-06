@@ -26,6 +26,8 @@ export interface ExportResult {
   height: number;
   duration: number;
   mode: 'webcodecs' | 'mediarecorder';
+  /** Audio rate actually used; lower than the request when the encoder caps it. */
+  audioBitrate?: number;
 }
 
 const even = (value: number): number => Math.max(2, Math.round(value / 2) * 2);
@@ -91,7 +93,11 @@ async function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
   });
 }
 
-async function supportsMp4(config: Config, width: number, height: number): Promise<{ video: string; audio: boolean } | null> {
+async function supportsMp4(
+  config: Config,
+  width: number,
+  height: number,
+): Promise<{ video: string; audioBitrate: number } | null> {
   if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') return null;
   const bitrate = bitrateFor(width, height, config.fps, config.quality);
   // High 5.1 / 4.2 first: 1080p60 needs level 4.2, and a level-4.0 string can be
@@ -111,18 +117,32 @@ async function supportsMp4(config: Config, width: number, height: number): Promi
     }
   }
   if (!video) return null;
-  try {
-    const audio = await AudioEncoder.isConfigSupported({
-      codec: 'mp4a.40.2',
-      sampleRate: TARGET_RATE,
-      numberOfChannels: 2,
-      bitrate: config.audioKbps * 1000,
-    });
-    if (!audio.supported) return null;
-  } catch {
-    return null;
+  const audioBitrate = await pickAudioBitrate(config.audioKbps);
+  if (!audioBitrate) return null;
+  return { video, audioBitrate };
+}
+
+// Chromium's AAC encoder refuses anything above 192 kbps for stereo, so a 256 or
+// 320 kbps setting used to void the whole fast path and drop the render into the
+// real-time encoder. Step down to a rate this machine accepts instead.
+async function pickAudioBitrate(requestedKbps: number): Promise<number | null> {
+  const tried = new Set<number>();
+  for (const kbps of [requestedKbps, 256, 192, 160, 128, 96]) {
+    if (kbps > requestedKbps || tried.has(kbps)) continue;
+    tried.add(kbps);
+    try {
+      const support = await AudioEncoder.isConfigSupported({
+        codec: 'mp4a.40.2',
+        sampleRate: TARGET_RATE,
+        numberOfChannels: 2,
+        bitrate: kbps * 1000,
+      });
+      if (support.supported) return kbps * 1000;
+    } catch {
+      /* try the next step down */
+    }
   }
-  return { video, audio: true };
+  return null;
 }
 
 /** Renders one still frame as a PNG at the chosen output size. */
@@ -197,7 +217,7 @@ export async function exportVideo(request: ExportRequest): Promise<ExportResult>
     if (config.bg === 'video' && assets.backgroundVideo && !assets.backgroundVideo.paused) {
       assets.backgroundVideo.pause();
     }
-    await encodeAudio(song, config, muxer, onProgress, signal, start, start + duration);
+    await encodeAudio(song, muxer, onProgress, support.audioBitrate, signal, start, start + duration);
 
     const step = 1 / fps;
     const frameDuration = Math.round(1_000_000 / fps);
@@ -227,7 +247,7 @@ export async function exportVideo(request: ExportRequest): Promise<ExportResult>
     const buffer = (muxer.target as ArrayBufferTarget).buffer;
     const blob = new Blob([buffer], { type: 'video/mp4' });
     onProgress?.('Done', 1);
-    return { blob, mime: 'video/mp4', extension: 'mp4', width, height, duration, mode: 'webcodecs' };
+    return { blob, mime: 'video/mp4', extension: 'mp4', width, height, duration, mode: 'webcodecs', audioBitrate: support.audioBitrate };
   } catch (error) {
     if (videoEncoder.state !== 'closed') videoEncoder.close();
     throw error;
@@ -236,9 +256,9 @@ export async function exportVideo(request: ExportRequest): Promise<ExportResult>
 
 async function encodeAudio(
   song: Song,
-  config: Config,
   muxer: Muxer<ArrayBufferTarget>,
   onProgress: ExportRequest['onProgress'],
+  audioBitrate: number,
   signal?: AbortSignal,
   from = 0,
   to = song.duration,
@@ -266,7 +286,7 @@ async function encodeAudio(
     codec: 'mp4a.40.2',
     sampleRate: TARGET_RATE,
     numberOfChannels: 2,
-    bitrate: config.audioKbps * 1000,
+    bitrate: audioBitrate,
   });
 
   const block = 8192;
@@ -390,5 +410,5 @@ async function exportRealtime(request: RealtimeRequest): Promise<ExportResult> {
   const blob = new Blob(chunks, { type: mime });
   const extension = mime.includes('mp4') ? 'mp4' : 'webm';
   onProgress?.('Done', 1);
-  return { blob, mime, extension, width, height, duration, mode: 'mediarecorder' };
+  return { blob, mime, extension, width, height, duration, mode: 'mediarecorder', audioBitrate: config.audioKbps * 1000 };
 }

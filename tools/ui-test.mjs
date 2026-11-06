@@ -913,6 +913,47 @@ const closeRender = await page.$('#btnCloseRender');
 if (closeRender) await closeRender.click();
 await page.waitForTimeout(300);
 
+// a 256/320 kbps request must not void the fast path: negotiate, do not fall back
+await page.evaluate(() => {
+  const file = document.querySelector('#renderFile');
+  if (file) file.textContent = '';
+  window.songframe.setConfig({ height: 480, fps: 30, rangeStart: 0, rangeEnd: 1, audioKbps: 320 });
+});
+await page.click('#btnRender');
+let cappedRender = null;
+for (let waited = 0; waited < 120000; waited += 500) {
+  cappedRender = await page.evaluate(() => {
+    const file = document.querySelector('#renderFile');
+    // Only accept the *fast* render; the previous real-time run left its own result behind.
+    if (!file || !file.textContent.trim() || window.songframe.lastExport.mode !== 'webcodecs') return null;
+    const warn = document.querySelector('#renderWarn');
+    return {
+      name: file.textContent.trim(),
+      meta: (document.querySelector('#renderMeta') || {}).textContent || '',
+      mode: window.songframe.lastExport.mode,
+      audio: window.songframe.lastExport.audioBitrate,
+      warned: Boolean(warn && !warn.hidden),
+    };
+  });
+  if (cappedRender) break;
+  await page.waitForTimeout(500);
+}
+check(
+  Boolean(cappedRender) &&
+    cappedRender.mode === 'webcodecs' &&
+    !cappedRender.name.includes('-realtime') &&
+    !cappedRender.warned &&
+    cappedRender.audio > 0 &&
+    cappedRender.audio <= 320000 &&
+    cappedRender.meta.includes('audio capped at'),
+  'a high audio bitrate is negotiated down instead of falling back',
+  JSON.stringify(cappedRender),
+);
+const closeCapped = await page.$('#btnCloseRender');
+if (closeCapped) await closeCapped.click();
+await page.waitForTimeout(300);
+await page.evaluate(() => window.songframe.setConfig({ audioKbps: 192 }));
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');

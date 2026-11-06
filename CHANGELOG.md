@@ -353,3 +353,19 @@ stock-photo library.
 - Tests: *the fast encoder is used when it is available* and *a real-time render
   is named and flagged* (hides `VideoEncoder`, renders one second, expects
   `songframe-...-480p-realtime.mp4` plus a visible warning).
+
+## 1.8.8 - 2026-11-06
+
+- **Found why so many renders were landing in the real-time encoder.** The Audio
+  bitrate choices 256 and 320 kbps made the fast-path probe fail outright:
+  Chromium's AAC encoder refuses more than 192 kbps for stereo, and the exporter
+  treated "this audio rate is unavailable" as "there is no fast encoder" - so the
+  entire render fell back to MediaRecorder and produced the fragmented MP4 that
+  DaVinci Resolve cannot open. The audio rate is now negotiated down
+  (320 -> 256 -> 192 -> 160 -> 128) and the fast path is kept; the result card
+  says "audio capped at 192 kbps" when the encoder caps it.
+- Measured on this machine (WebView2, Chrome 156): AAC stereo accepts 96, 128,
+  160 and 192 kbps and refuses 256, 320 and 512 at both 48 and 44.1 kHz; all
+  H.264 levels down to 4.0 accept 1080p60, and a real 1080p60 configure+encode
+  succeeds.
+- Tests: *a high audio bitrate is negotiated down instead of falling back*.

@@ -6720,18 +6720,27 @@ If you want to offset all timestamps of a track such that the first one is zero,
       }
     }
     if (!video) return null;
-    try {
-      const audio = await AudioEncoder.isConfigSupported({
-        codec: "mp4a.40.2",
-        sampleRate: TARGET_RATE,
-        numberOfChannels: 2,
-        bitrate: config.audioKbps * 1e3
-      });
-      if (!audio.supported) return null;
-    } catch {
-      return null;
+    const audioBitrate = await pickAudioBitrate(config.audioKbps);
+    if (!audioBitrate) return null;
+    return { video, audioBitrate };
+  }
+  async function pickAudioBitrate(requestedKbps) {
+    const tried = /* @__PURE__ */ new Set();
+    for (const kbps of [requestedKbps, 256, 192, 160, 128, 96]) {
+      if (kbps > requestedKbps || tried.has(kbps)) continue;
+      tried.add(kbps);
+      try {
+        const support = await AudioEncoder.isConfigSupported({
+          codec: "mp4a.40.2",
+          sampleRate: TARGET_RATE,
+          numberOfChannels: 2,
+          bitrate: kbps * 1e3
+        });
+        if (support.supported) return kbps * 1e3;
+      } catch {
+      }
     }
-    return { video, audio: true };
+    return null;
   }
   function exportFrame(song, config, assets, lyrics, time) {
     const { width, height } = frameSize(config);
@@ -6796,7 +6805,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (config.bg === "video" && assets.backgroundVideo && !assets.backgroundVideo.paused) {
         assets.backgroundVideo.pause();
       }
-      await encodeAudio(song, config, muxer, onProgress, signal, start, start + duration);
+      await encodeAudio(song, muxer, onProgress, support.audioBitrate, signal, start, start + duration);
       const step = 1 / fps;
       const frameDuration = Math.round(1e6 / fps);
       for (let i = 0; i < totalFrames; i++) {
@@ -6822,13 +6831,13 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const buffer = muxer.target.buffer;
       const blob = new Blob([buffer], { type: "video/mp4" });
       onProgress?.("Done", 1);
-      return { blob, mime: "video/mp4", extension: "mp4", width, height, duration, mode: "webcodecs" };
+      return { blob, mime: "video/mp4", extension: "mp4", width, height, duration, mode: "webcodecs", audioBitrate: support.audioBitrate };
     } catch (error) {
       if (videoEncoder.state !== "closed") videoEncoder.close();
       throw error;
     }
   }
-  async function encodeAudio(song, config, muxer, onProgress, signal, from = 0, to = song.duration) {
+  async function encodeAudio(song, muxer, onProgress, audioBitrate, signal, from = 0, to = song.duration) {
     const left = song.buffer.getChannelData(0);
     const right = song.buffer.numberOfChannels > 1 ? song.buffer.getChannelData(1) : left;
     const startSample = Math.max(0, Math.round(from * TARGET_RATE));
@@ -6851,7 +6860,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       codec: "mp4a.40.2",
       sampleRate: TARGET_RATE,
       numberOfChannels: 2,
-      bitrate: config.audioKbps * 1e3
+      bitrate: audioBitrate
     });
     const block = 8192;
     for (let offset = 0; offset < total; offset += block) {
@@ -6952,7 +6961,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const blob = new Blob(chunks, { type: mime });
     const extension = mime.includes("mp4") ? "mp4" : "webm";
     onProgress?.("Done", 1);
-    return { blob, mime, extension, width, height, duration, mode: "mediarecorder" };
+    return { blob, mime, extension, width, height, duration, mode: "mediarecorder", audioBitrate: config.audioKbps * 1e3 };
   }
 
   // src/media.ts
@@ -7980,7 +7989,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     centreCredit: "",
     lastExportName: "",
     lastExportPath: "",
-    lastExport: { blob: null, mime: "", bytes: 0, mode: "" }
+    lastExport: { blob: null, mime: "", bytes: 0, mode: "", audioBitrate: 0 }
   };
   var abortController = null;
   var lastDrawKey = "";
@@ -8783,7 +8792,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.lastExportUrl = saved.url ?? "";
       state.lastExportName = filename;
       state.lastExportPath = saved.path ?? "";
-      state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
+      state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
       const title = document.querySelector("#renderTitle");
       if (title) title.textContent = "Your video is ready";
       const sub = document.querySelector("#renderSub");
@@ -8792,7 +8801,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (file) file.textContent = filename;
       const meta = document.querySelector("#renderMeta");
       if (meta) {
-        meta.textContent = `${result.width}\xD7${result.height} \xB7 ${formatTime(result.duration)} \xB7 ${bytesLabel(result.blob.size)} \xB7 ${result.mime}${realtime ? " \xB7 real-time encoder" : ""}`;
+        const audioNote = result.audioBitrate && result.audioBitrate < state.config.audioKbps * 1e3 ? ` \xB7 audio capped at ${Math.round(result.audioBitrate / 1e3)} kbps` : "";
+        meta.textContent = `${result.width}\xD7${result.height} \xB7 ${formatTime(result.duration)} \xB7 ${bytesLabel(result.blob.size)} \xB7 ${result.mime}${realtime ? " \xB7 real-time encoder" : ""}${audioNote}`;
       }
       const warn = document.querySelector("#renderWarn");
       if (warn) {
@@ -9654,7 +9664,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
             endAt: config.rangeEnd,
             maxSeconds: options?.maxSeconds
           });
-          state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
+          state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
           return result.blob;
         } finally {
           state.exporting = false;

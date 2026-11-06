@@ -38,7 +38,7 @@ interface State {
   centreCredit: string;
   lastExportName: string;
   lastExportPath: string;
-  lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string };
+  lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string; audioBitrate?: number };
 }
 
 const state: State = {
@@ -63,7 +63,7 @@ const state: State = {
   centreCredit: '',
   lastExportName: '',
   lastExportPath: '',
-  lastExport: { blob: null, mime: '', bytes: 0, mode: '' },
+  lastExport: { blob: null, mime: '', bytes: 0, mode: '', audioBitrate: 0 },
 };
 
 let abortController: AbortController | null = null;
@@ -993,7 +993,7 @@ async function startRender(): Promise<void> {
     state.lastExportUrl = saved.url ?? '';
     state.lastExportName = filename;
     state.lastExportPath = saved.path ?? '';
-    state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
+    state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
 
     const title = document.querySelector('#renderTitle');
     if (title) title.textContent = 'Your video is ready';
@@ -1003,7 +1003,10 @@ async function startRender(): Promise<void> {
     if (file) file.textContent = filename;
     const meta = document.querySelector('#renderMeta');
     if (meta) {
-      meta.textContent = `${result.width}×${result.height} · ${formatTime(result.duration)} · ${bytesLabel(result.blob.size)} · ${result.mime}${realtime ? ' · real-time encoder' : ''}`;
+      const audioNote = result.audioBitrate && result.audioBitrate < state.config.audioKbps * 1000
+        ? ` · audio capped at ${Math.round(result.audioBitrate / 1000)} kbps`
+        : '';
+      meta.textContent = `${result.width}×${result.height} · ${formatTime(result.duration)} · ${bytesLabel(result.blob.size)} · ${result.mime}${realtime ? ' · real-time encoder' : ''}${audioNote}`;
     }
     const warn = document.querySelector<HTMLElement>('#renderWarn');
     if (warn) {
@@ -1915,7 +1918,7 @@ function boot(): void {
     getLyrics: () => { time: number; text: string; section: boolean; words: number }[];
     getBackground: () => { kind: string; videoPaused: boolean | null; videoTime: number | null; hasImage: boolean; hasCentreImage: boolean; cover: string };
     exportVideo: (options?: { height?: number; fps?: number; maxSeconds?: number }) => Promise<Blob>;
-    lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string };
+    lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string; audioBitrate?: number };
   }
 
   const api: SongframeApi = {
@@ -1976,7 +1979,7 @@ function boot(): void {
           endAt: config.rangeEnd,
           maxSeconds: options?.maxSeconds,
         });
-        state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
+        state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
         return result.blob;
       } finally {
         state.exporting = false;

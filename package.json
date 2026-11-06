@@ -1,6 +1,6 @@
 {
   "name": "songframe",
-  "version": "1.8.7",
+  "version": "1.8.8",
   "private": true,
   "description": "Songframe Studio - a standalone, offline song-to-video visualizer studio. Upload a track, design the look, render MP4.",
   "scripts": {
