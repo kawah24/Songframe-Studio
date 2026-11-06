@@ -94,7 +94,10 @@ async function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
 async function supportsMp4(config: Config, width: number, height: number): Promise<{ video: string; audio: boolean } | null> {
   if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') return null;
   const bitrate = bitrateFor(width, height, config.fps, config.quality);
-  const candidates = ['avc1.640028', 'avc1.4d0028', 'avc1.42001f'];
+  // High 5.1 / 4.2 first: 1080p60 needs level 4.2, and a level-4.0 string can be
+  // refused by the platform encoder, which used to drop the whole render into the
+  // real-time fallback without saying so.
+  const candidates = ['avc1.640033', 'avc1.64002a', 'avc1.640028', 'avc1.4d0028', 'avc1.42001f'];
   let video: string | null = null;
   for (const codec of candidates) {
     try {

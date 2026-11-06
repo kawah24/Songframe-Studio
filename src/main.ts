@@ -38,7 +38,7 @@ interface State {
   centreCredit: string;
   lastExportName: string;
   lastExportPath: string;
-  lastExport: { blob: Blob | null; mime: string; bytes: number };
+  lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string };
 }
 
 const state: State = {
@@ -63,7 +63,7 @@ const state: State = {
   centreCredit: '',
   lastExportName: '',
   lastExportPath: '',
-  lastExport: { blob: null, mime: '', bytes: 0 },
+  lastExport: { blob: null, mime: '', bytes: 0, mode: '' },
 };
 
 let abortController: AbortController | null = null;
@@ -978,7 +978,10 @@ async function startRender(): Promise<void> {
       onProgress: (stage, fraction, detail) => ui.modalProgress(stage, fraction, detail),
     });
 
-    const filename = `songframe-${slugify(song.name)}-${result.height}p.${result.extension}`;
+    // A real-time (MediaRecorder) render is a fragmented MP4: playable, but
+    // DaVinci Resolve and Premiere refuse it. Say so in the file name.
+    const realtime = result.mode === 'mediarecorder';
+    const filename = `songframe-${slugify(song.name)}-${result.height}p${realtime ? '-realtime' : ''}.${result.extension}`;
     const saved = await persistBlob(result.blob, filename, 'video');
     if (!saved.saved) {
       state.exporting = false;
@@ -990,7 +993,7 @@ async function startRender(): Promise<void> {
     state.lastExportUrl = saved.url ?? '';
     state.lastExportName = filename;
     state.lastExportPath = saved.path ?? '';
-    state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size };
+    state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
 
     const title = document.querySelector('#renderTitle');
     if (title) title.textContent = 'Your video is ready';
@@ -1000,7 +1003,14 @@ async function startRender(): Promise<void> {
     if (file) file.textContent = filename;
     const meta = document.querySelector('#renderMeta');
     if (meta) {
-      meta.textContent = `${result.width}×${result.height} · ${formatTime(result.duration)} · ${bytesLabel(result.blob.size)} · ${result.mime}`;
+      meta.textContent = `${result.width}×${result.height} · ${formatTime(result.duration)} · ${bytesLabel(result.blob.size)} · ${result.mime}${realtime ? ' · real-time encoder' : ''}`;
+    }
+    const warn = document.querySelector<HTMLElement>('#renderWarn');
+    if (warn) {
+      warn.hidden = !realtime;
+      warn.textContent = realtime
+        ? 'This render used the real-time encoder because the fast H.264 encoder was unavailable. Its MP4 is fragmented, and DaVinci Resolve and Premiere cannot open it - re-render in the desktop app, or remux it with ffmpeg before editing.'
+        : '';
     }
     const again = document.querySelector<HTMLAnchorElement>('#btnDownloadAgain');
     if (again) {
@@ -1016,7 +1026,11 @@ async function startRender(): Promise<void> {
     const close = document.querySelector<HTMLButtonElement>('#btnCloseRender');
     if (close) close.hidden = false;
     ui.modalProgress('Done', 1, `${bytesLabel(result.blob.size)} · ${result.mime}`);
-    ui.toast(`Rendered ${filename}`);
+    if (realtime) {
+      ui.toast(`Rendered ${filename} - real-time encoder, not Resolve-safe`, 'err');
+    } else {
+      ui.toast(`Rendered ${filename}`);
+    }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       ui.toast('Render cancelled.');
@@ -1901,7 +1915,7 @@ function boot(): void {
     getLyrics: () => { time: number; text: string; section: boolean; words: number }[];
     getBackground: () => { kind: string; videoPaused: boolean | null; videoTime: number | null; hasImage: boolean; hasCentreImage: boolean; cover: string };
     exportVideo: (options?: { height?: number; fps?: number; maxSeconds?: number }) => Promise<Blob>;
-    lastExport: { blob: Blob | null; mime: string; bytes: number };
+    lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string };
   }
 
   const api: SongframeApi = {
@@ -1962,7 +1976,7 @@ function boot(): void {
           endAt: config.rangeEnd,
           maxSeconds: options?.maxSeconds,
         });
-        state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size };
+        state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
         return result.blob;
       } finally {
         state.exporting = false;
@@ -1971,6 +1985,9 @@ function boot(): void {
     lastExport: state.lastExport,
   };
   (window as unknown as { songframe: SongframeApi }).songframe = api;
+  // The export result object is replaced on every render, so tests (and the
+  // bridge) must read it live rather than keep the first object.
+  Object.defineProperty(api, 'lastExport', { get: () => state.lastExport, configurable: true });
 }
 
 if (document.readyState === 'loading') {

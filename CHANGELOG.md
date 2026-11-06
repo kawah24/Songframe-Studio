@@ -335,3 +335,21 @@ stock-photo library.
   between them, and the stops travel in saved looks like any other setting.
 - Tests: *text opacity offers 90, 85 and 80 percent stops* (each stop clicks,
   writes 0.9 / 0.85 / 0.8, and reads back `85 %` with the chip lit).
+
+## 1.8.7 - 2026-11-06
+
+- **A real-time render can no longer pass as a normal MP4.** When the fast H.264
+  encoder is unavailable, the exporter falls back to MediaRecorder, and that
+  output is a *fragmented* MP4: it plays in browsers and QuickTime, but DaVinci
+  Resolve and Premiere report "Media Offline" and refuse to decode it. Those
+  files now carry a `-realtime` suffix, the result card shows an orange warning
+  explaining the limitation, and the toast says so. The ordinary path is
+  unchanged.
+- The encoder probe also tries High 5.1 and 4.2 before 4.0. 1080p60 needs level
+  4.2, and a level-4.0 codec string can be refused by the platform encoder,
+  which used to send a perfectly capable machine down the fallback on its own.
+- The test API's `lastExport` now reflects the latest render instead of the
+  object created at startup.
+- Tests: *the fast encoder is used when it is available* and *a real-time render
+  is named and flagged* (hides `VideoEncoder`, renders one second, expects
+  `songframe-...-480p-realtime.mp4` plus a visible warning).

@@ -470,6 +470,18 @@ textarea:focus-visible {
   padding: 6px 4px;
 }
 
+/* Real-time encoder notice in the render result card. */
+.render-warn {
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 138, 90, 0.35);
+  background: rgba(255, 106, 61, 0.1);
+  color: #ffb59b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Quick-pick row under the lyric text opacity slider. */
 .quick-opacity {
   margin-top: 8px;
@@ -2386,6 +2398,7 @@ body.is-modal {
         <div class="render-result" id="renderResult" hidden>
           <div class="render-file" id="renderFile"></div>
           <div class="render-meta" id="renderMeta"></div>
+          <p class="render-warn" id="renderWarn" hidden></p>
           <div class="render-actions">
             <a class="btn ghost small" id="btnDownloadAgain" download>Download again</a>
             <button class="btn ghost small" id="btnReveal" type="button" hidden>Show in folder</button>
@@ -6694,7 +6707,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
   async function supportsMp4(config, width, height) {
     if (typeof VideoEncoder === "undefined" || typeof AudioEncoder === "undefined") return null;
     const bitrate = bitrateFor(width, height, config.fps, config.quality);
-    const candidates = ["avc1.640028", "avc1.4d0028", "avc1.42001f"];
+    const candidates = ["avc1.640033", "avc1.64002a", "avc1.640028", "avc1.4d0028", "avc1.42001f"];
     let video = null;
     for (const codec of candidates) {
       try {
@@ -7967,7 +7980,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     centreCredit: "",
     lastExportName: "",
     lastExportPath: "",
-    lastExport: { blob: null, mime: "", bytes: 0 }
+    lastExport: { blob: null, mime: "", bytes: 0, mode: "" }
   };
   var abortController = null;
   var lastDrawKey = "";
@@ -8757,7 +8770,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
         endAt: config.rangeEnd,
         onProgress: (stage, fraction, detail) => modalProgress(stage, fraction, detail)
       });
-      const filename = `songframe-${slugify(song.name)}-${result.height}p.${result.extension}`;
+      const realtime = result.mode === "mediarecorder";
+      const filename = `songframe-${slugify(song.name)}-${result.height}p${realtime ? "-realtime" : ""}.${result.extension}`;
       const saved = await persistBlob(result.blob, filename, "video");
       if (!saved.saved) {
         state.exporting = false;
@@ -8769,7 +8783,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.lastExportUrl = saved.url ?? "";
       state.lastExportName = filename;
       state.lastExportPath = saved.path ?? "";
-      state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size };
+      state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
       const title = document.querySelector("#renderTitle");
       if (title) title.textContent = "Your video is ready";
       const sub = document.querySelector("#renderSub");
@@ -8778,7 +8792,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (file) file.textContent = filename;
       const meta = document.querySelector("#renderMeta");
       if (meta) {
-        meta.textContent = `${result.width}\xD7${result.height} \xB7 ${formatTime(result.duration)} \xB7 ${bytesLabel(result.blob.size)} \xB7 ${result.mime}`;
+        meta.textContent = `${result.width}\xD7${result.height} \xB7 ${formatTime(result.duration)} \xB7 ${bytesLabel(result.blob.size)} \xB7 ${result.mime}${realtime ? " \xB7 real-time encoder" : ""}`;
+      }
+      const warn = document.querySelector("#renderWarn");
+      if (warn) {
+        warn.hidden = !realtime;
+        warn.textContent = realtime ? "This render used the real-time encoder because the fast H.264 encoder was unavailable. Its MP4 is fragmented, and DaVinci Resolve and Premiere cannot open it - re-render in the desktop app, or remux it with ffmpeg before editing." : "";
       }
       const again = document.querySelector("#btnDownloadAgain");
       if (again) {
@@ -8794,7 +8813,11 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const close = document.querySelector("#btnCloseRender");
       if (close) close.hidden = false;
       modalProgress("Done", 1, `${bytesLabel(result.blob.size)} \xB7 ${result.mime}`);
-      toast(`Rendered ${filename}`);
+      if (realtime) {
+        toast(`Rendered ${filename} - real-time encoder, not Resolve-safe`, "err");
+      } else {
+        toast(`Rendered ${filename}`);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         toast("Render cancelled.");
@@ -9631,7 +9654,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
             endAt: config.rangeEnd,
             maxSeconds: options?.maxSeconds
           });
-          state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size };
+          state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode };
           return result.blob;
         } finally {
           state.exporting = false;
@@ -9640,6 +9663,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       lastExport: state.lastExport
     };
     window.songframe = api;
+    Object.defineProperty(api, "lastExport", { get: () => state.lastExport, configurable: true });
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

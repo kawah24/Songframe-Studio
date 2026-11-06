@@ -866,6 +866,53 @@ check(dragEdge.right <= 99.5, 'dragging keeps the text box inside the frame', `$
 await page.evaluate(() => window.songframe.setConfig({ text: [], lyrics: { ...window.songframe.getState().lyrics, enabled: false, glow: 0 } }));
 await page.evaluate(() => window.songframe.setConfig({ text: [], lyrics: { ...window.songframe.getState().lyrics, enabled: false, glow: 0 } }));
 
+// a missing fast encoder must be announced, not smuggled through as a normal MP4
+const fastMode = await page.evaluate(async () => {
+  window.songframe.setConfig({ height: 480, fps: 30, rangeStart: 0, rangeEnd: 1 });
+  await window.songframe.exportVideo({ height: 480, fps: 30, maxSeconds: 1 });
+  return { mode: window.songframe.lastExport.mode, mime: window.songframe.lastExport.mime };
+});
+check(fastMode.mode === 'webcodecs', 'the fast encoder is used when it is available', JSON.stringify(fastMode));
+
+await page.evaluate(() => {
+  window.__savedVideoEncoder = window.VideoEncoder;
+  try {
+    delete window.VideoEncoder;
+  } catch {
+    window.VideoEncoder = undefined;
+  }
+});
+await page.evaluate(() => window.songframe.setConfig({ height: 480, fps: 30, rangeStart: 0, rangeEnd: 1 }));
+await page.click('#btnRender');
+let fallbackUi = null;
+for (let waited = 0; waited < 120000; waited += 500) {
+  fallbackUi = await page.evaluate(() => {
+    const file = document.querySelector('#renderFile');
+    const warn = document.querySelector('#renderWarn');
+    const done = file && file.textContent.trim().length > 0;
+    return done
+      ? {
+          name: file.textContent.trim(),
+          warned: Boolean(warn && !warn.hidden && warn.textContent.trim().length > 0),
+          mode: window.songframe.lastExport.mode,
+        }
+      : null;
+  });
+  if (fallbackUi) break;
+  await page.waitForTimeout(500);
+}
+await page.evaluate(() => {
+  window.VideoEncoder = window.__savedVideoEncoder;
+});
+check(
+  Boolean(fallbackUi) && fallbackUi.mode === 'mediarecorder' && fallbackUi.name.endsWith('-realtime.mp4') && fallbackUi.warned,
+  'a real-time render is named and flagged',
+  JSON.stringify(fallbackUi),
+);
+const closeRender = await page.$('#btnCloseRender');
+if (closeRender) await closeRender.click();
+await page.waitForTimeout(300);
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');
