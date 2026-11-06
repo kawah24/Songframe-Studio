@@ -369,3 +369,17 @@ stock-photo library.
   H.264 levels down to 4.0 accept 1080p60, and a real 1080p60 configure+encode
   succeeds.
 - Tests: *a high audio bitrate is negotiated down instead of falling back*.
+
+## 1.9.0 - 2026-11-06
+
+- **End silence.** A new slider in the Frame pane appends up to 15 s (30 s in a
+  look file) of true digital silence after the last note, so a track can end on a
+  clean gap and tracklist / chapter boundaries land in empty space. The picture
+  keeps running for the same length; the preview still stops with the song, so
+  the tail is an export-only setting. 0 leaves the file exactly as before.
+- Measured on a 3 s probe song with a 3 s tail: 180 video frames at 30 fps,
+  container duration 6.016 s, and ffmpeg `astats` reports a peak and RMS level of
+  `-inf dB` from 3.02 s onward - exact zeros, not a fade or a muted track.
+- The result card reports `+3 s silence`, the size estimate includes the tail,
+  and the WebCodecs / real-time paths both record the full length.
+- Tests: *end silence extends the render with true silence*.

@@ -103,6 +103,7 @@ export const defaultConfig = (): Config => ({
   secondary: '#8b5cf6',
   rangeStart: 0,
   rangeEnd: 0,
+  endSilence: 0,
   aspect: '16:9',
   height: 1080,
   fps: 30,

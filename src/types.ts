@@ -88,6 +88,8 @@ export interface Config {
   /** Render range in seconds; 0 / 0 means the whole song. */
   rangeStart: number;
   rangeEnd: number;
+  /** Seconds of true digital silence appended after the last note; 0 = off. */
+  endSilence: number;
   /** Short side of the exported picture, in pixels. */
   height: 1080 | 720 | 480;
   fps: 24 | 30 | 60;

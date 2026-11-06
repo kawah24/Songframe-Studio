@@ -2171,6 +2171,11 @@ body.is-modal {
                 </div>
                 <button class="btn ghost small" id="btnRangePlayhead" type="button">Start at the playhead</button>
                 <p class="hint">Seconds. Leave “To” at 0 to render to the end of the song.</p>
+                <div class="field">
+                  <div class="field-top"><label for="endSilence">End silence</label><output id="endSilenceOut">Off</output></div>
+                  <input type="range" id="endSilence" min="0" max="15" step="0.5" value="0" />
+                  <p class="hint">True digital silence appended after the last note, for tracklist gaps. Export only - the preview still ends with the song.</p>
+                </div>
               </div>
 
               <div class="group">
@@ -2825,6 +2830,7 @@ body.is-modal {
     secondary: "#8b5cf6",
     rangeStart: 0,
     rangeEnd: 0,
+    endSilence: 0,
     aspect: "16:9",
     height: 1080,
     fps: 30,
@@ -6668,6 +6674,15 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const end = Math.max(start + 0.2, Math.min(songDuration, wantedEnd));
     return Math.max(0.2, end - start);
   }
+  function tailSeconds(config) {
+    const value = Number(config.endSilence);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Math.min(30, Math.round(value * 10) / 10);
+  }
+  function exportSeconds(config, songDuration) {
+    const body = renderSeconds(config, songDuration);
+    return body > 0 ? body + tailSeconds(config) : 0;
+  }
   function estimateSizeMB(config, seconds2) {
     if (!seconds2) return 0;
     const { width, height } = frameSize(config);
@@ -6761,7 +6776,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const start = Math.max(0, Math.min(song.duration - 0.1, request.startAt ?? 0));
     const wantedEnd = request.endAt && request.endAt > start ? request.endAt : song.duration;
     const end = Math.max(start + 0.2, Math.min(song.duration, wantedEnd));
-    const duration = Math.max(0.2, Math.min(end - start, request.maxSeconds ?? end - start));
+    const body = Math.max(0.2, Math.min(end - start, request.maxSeconds ?? end - start));
+    const duration = body + tailSeconds(config);
     const fps = config.fps;
     const totalFrames = Math.max(1, Math.round(duration * fps));
     const canvas = document.createElement("canvas");
@@ -6841,7 +6857,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const left = song.buffer.getChannelData(0);
     const right = song.buffer.numberOfChannels > 1 ? song.buffer.getChannelData(1) : left;
     const startSample = Math.max(0, Math.round(from * TARGET_RATE));
-    const endSample = Math.min(left.length, Math.round(to * TARGET_RATE));
+    const endSample = Math.max(startSample, Math.round(to * TARGET_RATE));
     const total = Math.max(0, endSample - startSample);
     let failure = null;
     const encoder = new AudioEncoder({
@@ -7989,7 +8005,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     centreCredit: "",
     lastExportName: "",
     lastExportPath: "",
-    lastExport: { blob: null, mime: "", bytes: 0, mode: "", audioBitrate: 0 }
+    lastExport: { blob: null, mime: "", bytes: 0, mode: "", audioBitrate: 0, duration: 0 }
   };
   var abortController = null;
   var lastDrawKey = "";
@@ -8167,7 +8183,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
   function syncSizeEstimate() {
     const el = document.querySelector("#qualitySize");
     if (!el) return;
-    const seconds2 = renderSeconds(state.config, state.song?.duration ?? 0);
+    const seconds2 = exportSeconds(state.config, state.song?.duration ?? 0);
     if (!state.song || !seconds2) {
       el.textContent = "Estimated file: load a song to see the size.";
       return;
@@ -8195,6 +8211,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const values = {
       "#particlesOut": String(config.particles),
       "#qualityOut": `${Math.round(config.quality * 100)}% \xB7 ${qualityLabel(config.quality)}`,
+      "#endSilenceOut": config.endSilence > 0 ? `${config.endSilence} s` : "Off",
       "#dimOut": `${Math.round(config.dim * 100)}%`,
       "#zoomSpeedOut": config.zoomSpeed <= 0 ? "Off" : `${config.zoomSpeed}x`,
       "#waterScaleOut": `${Math.round(config.watermarkScale * 100)}%`,
@@ -8226,6 +8243,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = String(Math.round(config.rangeStart * 10) / 10);
     const rangeEndInput = document.querySelector("#rangeEnd");
     if (rangeEndInput && document.activeElement !== rangeEndInput) rangeEndInput.value = String(Math.round(config.rangeEnd * 10) / 10);
+    const endSilenceInput = document.querySelector("#endSilence");
+    if (endSilenceInput && document.activeElement !== endSilenceInput) endSilenceInput.value = String(config.endSilence ?? 0);
     const setRange = (selector, value) => {
       const input = document.querySelector(selector);
       if (!input || document.activeElement === input) return;
@@ -8234,6 +8253,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     };
     setRange("#particles", config.particles);
     setRange("#quality", Math.round(config.quality * 100));
+    setRange("#endSilence", config.endSilence ?? 0);
     setRange("#dim", Math.round(config.dim * 100));
     setRange("#zoomSpeed", Math.round(config.zoomSpeed * 100));
     setRange("#waterScale", Math.round(config.watermarkScale * 100));
@@ -8792,7 +8812,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.lastExportUrl = saved.url ?? "";
       state.lastExportName = filename;
       state.lastExportPath = saved.path ?? "";
-      state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
+      state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate, duration: result.duration };
       const title = document.querySelector("#renderTitle");
       if (title) title.textContent = "Your video is ready";
       const sub = document.querySelector("#renderSub");
@@ -8802,7 +8822,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const meta = document.querySelector("#renderMeta");
       if (meta) {
         const audioNote = result.audioBitrate && result.audioBitrate < state.config.audioKbps * 1e3 ? ` \xB7 audio capped at ${Math.round(result.audioBitrate / 1e3)} kbps` : "";
-        meta.textContent = `${result.width}\xD7${result.height} \xB7 ${formatTime(result.duration)} \xB7 ${bytesLabel(result.blob.size)} \xB7 ${result.mime}${realtime ? " \xB7 real-time encoder" : ""}${audioNote}`;
+        const tailNote = state.config.endSilence > 0 ? ` \xB7 +${state.config.endSilence} s silence` : "";
+        meta.textContent = `${result.width}\xD7${result.height} \xB7 ${formatTime(result.duration)} \xB7 ${bytesLabel(result.blob.size)} \xB7 ${result.mime}${realtime ? " \xB7 real-time encoder" : ""}${audioNote}${tailNote}`;
       }
       const warn = document.querySelector("#renderWarn");
       if (warn) {
@@ -9161,6 +9182,14 @@ If you want to offset all timestamps of a track such that the first one is zero,
     $("#rangeEnd").addEventListener("input", (event) => {
       state.config.rangeEnd = Math.max(0, Number(event.target.value) || 0);
       state.version += 1;
+      syncSizeEstimate();
+    });
+    $("#endSilence").addEventListener("input", (event) => {
+      const raw = Number(event.target.value);
+      state.config.endSilence = Number.isFinite(raw) ? Math.max(0, Math.min(30, raw)) : 0;
+      state.version += 1;
+      const out = document.querySelector("#endSilenceOut");
+      if (out) out.textContent = state.config.endSilence > 0 ? `${state.config.endSilence} s` : "Off";
       syncSizeEstimate();
     });
     $("#btnRangePlayhead").addEventListener("click", () => {
@@ -9664,7 +9693,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
             endAt: config.rangeEnd,
             maxSeconds: options?.maxSeconds
           });
-          state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
+          state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate, duration: result.duration };
           return result.blob;
         } finally {
           state.exporting = false;

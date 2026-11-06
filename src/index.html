@@ -124,6 +124,11 @@
                 </div>
                 <button class="btn ghost small" id="btnRangePlayhead" type="button">Start at the playhead</button>
                 <p class="hint">Seconds. Leave “To” at 0 to render to the end of the song.</p>
+                <div class="field">
+                  <div class="field-top"><label for="endSilence">End silence</label><output id="endSilenceOut">Off</output></div>
+                  <input type="range" id="endSilence" min="0" max="15" step="0.5" value="0" />
+                  <p class="hint">True digital silence appended after the last note, for tracklist gaps. Export only - the preview still ends with the song.</p>
+                </div>
               </div>
 
               <div class="group">

@@ -954,6 +954,40 @@ if (closeCapped) await closeCapped.click();
 await page.waitForTimeout(300);
 await page.evaluate(() => window.songframe.setConfig({ audioKbps: 192 }));
 
+// end silence extends the render with true (digital) silence
+await page.evaluate(() => {
+  const file = document.querySelector('#renderFile');
+  if (file) file.textContent = '';
+  window.songframe.setConfig({ height: 480, fps: 30, rangeStart: 0, rangeEnd: 1, audioKbps: 192, endSilence: 3 });
+});
+await page.click('#btnRender');
+let padded = null;
+for (let waited = 0; waited < 120000; waited += 500) {
+  padded = await page.evaluate(() => {
+    const file = document.querySelector('#renderFile');
+    if (!file || !file.textContent.trim() || window.songframe.lastExport.mode !== 'webcodecs') return null;
+    const duration = window.songframe.lastExport.duration;
+    if (!(duration > 1)) return null;
+    return {
+      name: file.textContent.trim(),
+      meta: (document.querySelector('#renderMeta') || {}).textContent || '',
+      mode: window.songframe.lastExport.mode,
+      duration,
+    };
+  });
+  if (padded) break;
+  await page.waitForTimeout(500);
+}
+check(
+  Boolean(padded) && Math.abs(padded.duration - 4) < 0.15 && padded.meta.includes('+3 s silence'),
+  'end silence extends the render with true silence',
+  JSON.stringify(padded),
+);
+const closePadded = await page.$('#btnCloseRender');
+if (closePadded) await closePadded.click();
+await page.waitForTimeout(300);
+await page.evaluate(() => window.songframe.setConfig({ endSilence: 0, rangeStart: 0, rangeEnd: 0 }));
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');

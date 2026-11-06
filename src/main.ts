@@ -2,7 +2,7 @@ import { decodeSong, frameAt, Playback, type Song } from './audio';
 import defaultLogoUrl from './assets/logo.webp';
 import { initialsOf, loadImageFile, loadImageUrl, loadVideoFile, loadVideoUrl, makeCoverArt } from './backgrounds';
 import { fontFamily, hydrateSystemFonts } from './fonts';
-import { estimateSizeMB, exportFrame, exportVideo, frameSize, renderSeconds, type ExportResult } from './export';
+import { estimateSizeMB, exportFrame, exportSeconds, exportVideo, frameSize, type ExportResult } from './export';
 import { parseLyrics } from './lyrics';
 import { creditLine, resolveFullSize, type MediaItem } from './media';
 import { createMediaPicker, PATTERN_NAMES } from './media-ui';
@@ -38,7 +38,7 @@ interface State {
   centreCredit: string;
   lastExportName: string;
   lastExportPath: string;
-  lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string; audioBitrate?: number };
+  lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string; audioBitrate?: number; duration?: number };
 }
 
 const state: State = {
@@ -63,7 +63,7 @@ const state: State = {
   centreCredit: '',
   lastExportName: '',
   lastExportPath: '',
-  lastExport: { blob: null, mime: '', bytes: 0, mode: '', audioBitrate: 0 },
+  lastExport: { blob: null, mime: '', bytes: 0, mode: '', audioBitrate: 0, duration: 0 },
 };
 
 let abortController: AbortController | null = null;
@@ -309,7 +309,7 @@ function qualityLabel(quality: number): string {
 function syncSizeEstimate(): void {
   const el = document.querySelector('#qualitySize');
   if (!el) return;
-  const seconds = renderSeconds(state.config, state.song?.duration ?? 0);
+  const seconds = exportSeconds(state.config, state.song?.duration ?? 0);
   if (!state.song || !seconds) {
     el.textContent = 'Estimated file: load a song to see the size.';
     return;
@@ -342,6 +342,7 @@ function syncChrome(): void {
   const values: Record<string, string> = {
     '#particlesOut': String(config.particles),
     '#qualityOut': `${Math.round(config.quality * 100)}% · ${qualityLabel(config.quality)}`,
+    '#endSilenceOut': config.endSilence > 0 ? `${config.endSilence} s` : 'Off',
     '#dimOut': `${Math.round(config.dim * 100)}%`,
     '#zoomSpeedOut': config.zoomSpeed <= 0 ? 'Off' : `${config.zoomSpeed}x`,
     '#waterScaleOut': `${Math.round(config.watermarkScale * 100)}%`,
@@ -375,6 +376,8 @@ function syncChrome(): void {
   if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = String(Math.round(config.rangeStart * 10) / 10);
   const rangeEndInput = document.querySelector<HTMLInputElement>('#rangeEnd');
   if (rangeEndInput && document.activeElement !== rangeEndInput) rangeEndInput.value = String(Math.round(config.rangeEnd * 10) / 10);
+  const endSilenceInput = document.querySelector<HTMLInputElement>('#endSilence');
+  if (endSilenceInput && document.activeElement !== endSilenceInput) endSilenceInput.value = String(config.endSilence ?? 0);
 
   const setRange = (selector: string, value: number): void => {
     const input = document.querySelector<HTMLInputElement>(selector);
@@ -384,6 +387,7 @@ function syncChrome(): void {
   };
   setRange('#particles', config.particles);
   setRange('#quality', Math.round(config.quality * 100));
+  setRange('#endSilence', config.endSilence ?? 0);
   setRange('#dim', Math.round(config.dim * 100));
   setRange('#zoomSpeed', Math.round(config.zoomSpeed * 100));
   setRange('#waterScale', Math.round(config.watermarkScale * 100));
@@ -993,7 +997,7 @@ async function startRender(): Promise<void> {
     state.lastExportUrl = saved.url ?? '';
     state.lastExportName = filename;
     state.lastExportPath = saved.path ?? '';
-    state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
+    state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate, duration: result.duration };
 
     const title = document.querySelector('#renderTitle');
     if (title) title.textContent = 'Your video is ready';
@@ -1006,7 +1010,8 @@ async function startRender(): Promise<void> {
       const audioNote = result.audioBitrate && result.audioBitrate < state.config.audioKbps * 1000
         ? ` · audio capped at ${Math.round(result.audioBitrate / 1000)} kbps`
         : '';
-      meta.textContent = `${result.width}×${result.height} · ${formatTime(result.duration)} · ${bytesLabel(result.blob.size)} · ${result.mime}${realtime ? ' · real-time encoder' : ''}${audioNote}`;
+      const tailNote = state.config.endSilence > 0 ? ` · +${state.config.endSilence} s silence` : '';
+      meta.textContent = `${result.width}×${result.height} · ${formatTime(result.duration)} · ${bytesLabel(result.blob.size)} · ${result.mime}${realtime ? ' · real-time encoder' : ''}${audioNote}${tailNote}`;
     }
     const warn = document.querySelector<HTMLElement>('#renderWarn');
     if (warn) {
@@ -1432,6 +1437,15 @@ function bindEvents(): void {
   ui.$('#rangeEnd').addEventListener('input', (event) => {
     state.config.rangeEnd = Math.max(0, Number((event.target as HTMLInputElement).value) || 0);
     state.version += 1;
+    syncSizeEstimate();
+  });
+
+  ui.$('#endSilence').addEventListener('input', (event) => {
+    const raw = Number((event.target as HTMLInputElement).value);
+    state.config.endSilence = Number.isFinite(raw) ? Math.max(0, Math.min(30, raw)) : 0;
+    state.version += 1;
+    const out = document.querySelector('#endSilenceOut');
+    if (out) out.textContent = state.config.endSilence > 0 ? `${state.config.endSilence} s` : 'Off';
     syncSizeEstimate();
   });
 
@@ -1918,7 +1932,7 @@ function boot(): void {
     getLyrics: () => { time: number; text: string; section: boolean; words: number }[];
     getBackground: () => { kind: string; videoPaused: boolean | null; videoTime: number | null; hasImage: boolean; hasCentreImage: boolean; cover: string };
     exportVideo: (options?: { height?: number; fps?: number; maxSeconds?: number }) => Promise<Blob>;
-    lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string; audioBitrate?: number };
+    lastExport: { blob: Blob | null; mime: string; bytes: number; mode?: string; audioBitrate?: number; duration?: number };
   }
 
   const api: SongframeApi = {
@@ -1979,7 +1993,7 @@ function boot(): void {
           endAt: config.rangeEnd,
           maxSeconds: options?.maxSeconds,
         });
-        state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate };
+        state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate, duration: result.duration };
         return result.blob;
       } finally {
         state.exporting = false;

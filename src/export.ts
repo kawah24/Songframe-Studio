@@ -51,6 +51,22 @@ export function renderSeconds(config: Config, songDuration: number): number {
   return Math.max(0.2, end - start);
 }
 
+/**
+ * Silence appended after the last note, in seconds. Absent or nonsense values
+ * mean "no tail", so old look files and old saved sessions keep working.
+ */
+export function tailSeconds(config: Config): number {
+  const value = Number(config.endSilence);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(30, Math.round(value * 10) / 10);
+}
+
+/** Total length written to the file: the song portion plus the silence tail. */
+export function exportSeconds(config: Config, songDuration: number): number {
+  const body = renderSeconds(config, songDuration);
+  return body > 0 ? body + tailSeconds(config) : 0;
+}
+
 /** Rough file size in MB from the bitrates the encoder is configured with. */
 export function estimateSizeMB(config: Config, seconds: number): number {
   if (!seconds) return 0;
@@ -167,7 +183,9 @@ export async function exportVideo(request: ExportRequest): Promise<ExportResult>
   const start = Math.max(0, Math.min(song.duration - 0.1, request.startAt ?? 0));
   const wantedEnd = request.endAt && request.endAt > start ? request.endAt : song.duration;
   const end = Math.max(start + 0.2, Math.min(song.duration, wantedEnd));
-  const duration = Math.max(0.2, Math.min(end - start, request.maxSeconds ?? end - start));
+  const body = Math.max(0.2, Math.min(end - start, request.maxSeconds ?? end - start));
+  // The tail rides after the song portion: all-zero audio, frames kept drawing.
+  const duration = body + tailSeconds(config);
   const fps = config.fps;
   const totalFrames = Math.max(1, Math.round(duration * fps));
 
@@ -266,7 +284,9 @@ async function encodeAudio(
   const left = song.buffer.getChannelData(0);
   const right = song.buffer.numberOfChannels > 1 ? song.buffer.getChannelData(1) : left;
   const startSample = Math.max(0, Math.round(from * TARGET_RATE));
-  const endSample = Math.min(left.length, Math.round(to * TARGET_RATE));
+  // Beyond the buffer a subarray is empty, so the zeroed planar chunk below is
+  // exactly digital silence - that is how the end tail is written.
+  const endSample = Math.max(startSample, Math.round(to * TARGET_RATE));
   const total = Math.max(0, endSample - startSample);
 
   let failure: Error | null = null;
