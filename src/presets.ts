@@ -137,6 +137,8 @@ export const defaultConfig = (): Config => ({
     font: 'Segoe UI',
     bold: true,
     glow: 0,
+    shadow: 1,
+    shadowOffset: 1,
     style: 'karaoke',
     pos: 'bottom',
     size: 46,

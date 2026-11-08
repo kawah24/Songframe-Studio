@@ -358,6 +358,8 @@ function syncChrome(): void {
     '#lyricOpacityOut': `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
     '#lyricPillOpacityOut': `${Math.round(config.lyrics.pillOpacity * 100)}%`,
     '#lyricGlowOut': `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
+    '#lyricShadowOut': `${Math.round((config.lyrics.shadow ?? 1) * 100)}%`,
+    '#lyricShadowOffsetOut': `${Math.round((config.lyrics.shadowOffset ?? 1) * 100)}%`,
     '#primaryHex': config.primary.toUpperCase(),
     '#secondaryHex': config.secondary.toUpperCase(),
   };
@@ -411,6 +413,8 @@ function syncChrome(): void {
   });
   setRange('#lyricPillOpacity', Math.round(config.lyrics.pillOpacity * 100));
   setRange('#lyricGlow', Math.round((config.lyrics.glow ?? 0) * 100));
+  setRange('#lyricShadow', Math.round((config.lyrics.shadow ?? 1) * 100));
+  setRange('#lyricShadowOffset', Math.round((config.lyrics.shadowOffset ?? 1) * 100));
   setRange('#seekRange', 0);
 
   const colorInputs: [string, string][] = [
@@ -426,6 +430,8 @@ function syncChrome(): void {
   }
   const sections = document.querySelector<HTMLInputElement>('#lyricSections');
   if (sections) sections.checked = config.lyrics.showSections;
+  const boldBox = document.querySelector<HTMLInputElement>('#lyricBold');
+  if (boldBox) boldBox.checked = config.lyrics.bold !== false;
 
   ui.syncPresetGrid(config.preset);
   ui.syncSwatches(config.primary);
@@ -1646,6 +1652,27 @@ function bindEvents(): void {
     state.version += 1;
     const out = document.querySelector('#lyricOffsetOut');
     if (out) out.textContent = `${state.config.lyrics.offset.toFixed(1)} s`;
+  });
+
+  ui.$('#lyricBold').addEventListener('change', (event) => {
+    state.config.lyrics.bold = (event.target as HTMLInputElement).checked;
+    state.version += 1;
+  });
+
+  ui.$('#lyricShadow').addEventListener('input', (event) => {
+    const percent = Number((event.target as HTMLInputElement).value);
+    state.config.lyrics.shadow = percent / 100;
+    const out = document.querySelector('#lyricShadowOut');
+    if (out) out.textContent = `${percent}%`;
+    state.version += 1;
+  });
+
+  ui.$('#lyricShadowOffset').addEventListener('input', (event) => {
+    const percent = Number((event.target as HTMLInputElement).value);
+    state.config.lyrics.shadowOffset = percent / 100;
+    const out = document.querySelector('#lyricShadowOffsetOut');
+    if (out) out.textContent = `${percent}%`;
+    state.version += 1;
   });
 
   ui.$('#lyricSections').addEventListener('change', (event) => {

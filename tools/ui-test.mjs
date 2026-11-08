@@ -988,6 +988,51 @@ if (closePadded) await closePadded.click();
 await page.waitForTimeout(300);
 await page.evaluate(() => window.songframe.setConfig({ endSilence: 0, rangeStart: 0, rangeEnd: 0 }));
 
+// the bold checkbox and the two shadow sliders reach the config
+const lyricControls = await page.evaluate(() => {
+  const out = {};
+  const bold = document.querySelector('#lyricBold');
+  out.boldBefore = window.songframe.getState().lyrics.bold;
+  bold.click();
+  out.boldAfterClick = window.songframe.getState().lyrics.bold;
+  out.boldChecked = bold.checked;
+  bold.click();
+  out.boldRestored = window.songframe.getState().lyrics.bold;
+
+  const shadow = document.querySelector('#lyricShadow');
+  shadow.value = '30';
+  shadow.dispatchEvent(new Event('input', { bubbles: true }));
+  out.shadow = window.songframe.getState().lyrics.shadow;
+  out.shadowOut = document.querySelector('#lyricShadowOut').textContent;
+
+  const offset = document.querySelector('#lyricShadowOffset');
+  offset.value = '150';
+  offset.dispatchEvent(new Event('input', { bubbles: true }));
+  out.offset = window.songframe.getState().lyrics.shadowOffset;
+  out.offsetOut = document.querySelector('#lyricShadowOffsetOut').textContent;
+
+  shadow.value = '100';
+  shadow.dispatchEvent(new Event('input', { bubbles: true }));
+  offset.value = '100';
+  offset.dispatchEvent(new Event('input', { bubbles: true }));
+  return out;
+});
+check(
+  lyricControls.boldAfterClick === !lyricControls.boldBefore &&
+    lyricControls.boldChecked === lyricControls.boldAfterClick &&
+    lyricControls.boldRestored === lyricControls.boldBefore,
+  'the bold checkbox drives the lyric weight',
+  JSON.stringify({ before: lyricControls.boldBefore, after: lyricControls.boldAfterClick, restored: lyricControls.boldRestored }),
+);
+check(
+  lyricControls.shadow === 0.3 &&
+    lyricControls.shadowOut === '30%' &&
+    Math.abs(lyricControls.offset - 1.5) < 1e-9 &&
+    lyricControls.offsetOut === '150%',
+  'the drop shadow sliders reach the config',
+  JSON.stringify({ shadow: lyricControls.shadow, offset: lyricControls.offset }),
+);
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');

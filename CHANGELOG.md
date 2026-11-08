@@ -383,3 +383,21 @@ stock-photo library.
 - The result card reports `+3 s silence`, the size estimate includes the tail,
   and the WebCodecs / real-time paths both record the full length.
 - Tests: *end silence extends the render with true silence*.
+
+## 1.10.0 - 2026-11-08
+
+- **Bold works again.** The Bold checkbox in the Text pane had no handler and no
+  state sync - it was decoration: clearing it changed nothing, and the box could
+  disagree with the frame. It is now wired to `lyrics.bold`, and the box is
+  restored from the config whenever the pane is rebuilt.
+- **Drop shadow controls.** Two sliders in the Text pane: *Drop shadow*
+  (0-100 %, strength of the black soft shadow) and *Shadow offset* (0-200 %, how
+  far it sits below the letters; 100 % is the historical look, 0 is a centred
+  halo). Above 100 % the blur tightens as the shadow travels, so the offset stays
+  visible instead of dissolving into the blur.
+- Measured on a 1508x848 preview with 120 px lyrics: bold on/off changes 40 155
+  pixels (max channel delta 236/255); shadow 100 %/0 % changes 63 478 pixels;
+  offset 100 %/200 % changes 30 978 pixels. Two frames drawn back to back with no
+  change are pixel-identical (delta 0), so the differences are the controls.
+- Tests: *the bold checkbox drives the lyric weight*, *the drop shadow sliders
+  reach the config*.

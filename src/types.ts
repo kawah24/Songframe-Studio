@@ -64,6 +64,10 @@ export interface LyricsConfig {
   bold?: boolean;
   /** Neon halo strength, 0..1. */
   glow: number;
+  /** 0..1 black drop shadow behind the letters; absent means the full shadow. */
+  shadow?: number;
+  /** 0..1 how far the shadow sits from the letters; 0 is a centred halo. */
+  shadowOffset?: number;
   style: LyricsStyle;
   pos: LyricsPos;
   size: number;

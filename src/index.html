@@ -246,6 +246,16 @@
                     <input type="range" id="lyricGlow" min="0" max="100" step="1" value="0" />
                   </div>
                   <div class="field">
+                    <div class="field-top"><label for="lyricShadow">Drop shadow</label><output id="lyricShadowOut">100%</output></div>
+                    <input type="range" id="lyricShadow" min="0" max="100" step="1" value="100" />
+                    <p class="hint">Black soft shadow behind the letters. Lower it on busy footage, 0 turns it off.</p>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricShadowOffset">Shadow offset</label><output id="lyricShadowOffsetOut">100%</output></div>
+                    <input type="range" id="lyricShadowOffset" min="0" max="200" step="5" value="100" />
+                    <p class="hint">How far the shadow drops below the letters. 100% is the current look, 0 keeps it centred like a halo.</p>
+                  </div>
+                  <div class="field">
                     <div class="field-top"><label for="lyricLines">Visible lines</label><output id="lyricLinesOut">2</output></div>
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
                   </div>

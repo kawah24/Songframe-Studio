@@ -362,14 +362,21 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   const weight = cfg.bold === false ? 400 : 700;
   ctx.font = `${weight} ${cfg.size}px ${family}`;
   const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+  const shadow = Math.max(0, Math.min(1, cfg.shadow ?? 1));
+  // 1 is the historical offset; the slider can double it for a visible drop.
+  const shadowShift = Math.max(0, Math.min(2, cfg.shadowOffset ?? 1));
   // Text opacity fades the letters, their drop shadow and the glow together.
   const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1));
   // The black drop shadow is painted over the glow, so ease it back as the glow
   // comes up, otherwise the halo is smothered before it can be seen.
-  ctx.shadowColor = `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha).toFixed(3)})`;
-  ctx.shadowBlur = Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow);
-  ctx.shadowOffsetX = cfg.size * 0.04;
-  ctx.shadowOffsetY = cfg.size * 0.07;
+  ctx.shadowColor =
+    shadow <= 0 ? 'transparent' : `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha * shadow).toFixed(3)})`;
+  // A shadow that travels further should also tighten, otherwise the soft blur
+  // swallows the offset and the slider does nothing visible.
+  const crisp = 1 - 0.35 * Math.max(0, Math.min(1, shadowShift - 1));
+  ctx.shadowBlur = shadow <= 0 ? 0 : Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow) * crisp;
+  ctx.shadowOffsetX = cfg.size * 0.04 * shadowShift;
+  ctx.shadowOffsetY = cfg.size * 0.07 * shadowShift;
   ctx.fillStyle = cfg.color;
 
   // One wide shadow blur spreads the light thinner than a letter stem, which

@@ -2293,6 +2293,16 @@ body.is-modal {
                     <input type="range" id="lyricGlow" min="0" max="100" step="1" value="0" />
                   </div>
                   <div class="field">
+                    <div class="field-top"><label for="lyricShadow">Drop shadow</label><output id="lyricShadowOut">100%</output></div>
+                    <input type="range" id="lyricShadow" min="0" max="100" step="1" value="100" />
+                    <p class="hint">Black soft shadow behind the letters. Lower it on busy footage, 0 turns it off.</p>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricShadowOffset">Shadow offset</label><output id="lyricShadowOffsetOut">100%</output></div>
+                    <input type="range" id="lyricShadowOffset" min="0" max="200" step="5" value="100" />
+                    <p class="hint">How far the shadow drops below the letters. 100% is the current look, 0 keeps it centred like a halo.</p>
+                  </div>
+                  <div class="field">
                     <div class="field-top"><label for="lyricLines">Visible lines</label><output id="lyricLinesOut">2</output></div>
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
                   </div>
@@ -2864,6 +2874,8 @@ body.is-modal {
       font: "Segoe UI",
       bold: true,
       glow: 0,
+      shadow: 1,
+      shadowOffset: 1,
       style: "karaoke",
       pos: "bottom",
       size: 46,
@@ -5598,11 +5610,14 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const weight = cfg.bold === false ? 400 : 700;
     ctx.font = `${weight} ${cfg.size}px ${family}`;
     const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
+    const shadow = Math.max(0, Math.min(1, cfg.shadow ?? 1));
+    const shadowShift = Math.max(0, Math.min(2, cfg.shadowOffset ?? 1));
     const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1));
-    ctx.shadowColor = `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha).toFixed(3)})`;
-    ctx.shadowBlur = Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow);
-    ctx.shadowOffsetX = cfg.size * 0.04;
-    ctx.shadowOffsetY = cfg.size * 0.07;
+    ctx.shadowColor = shadow <= 0 ? "transparent" : `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha * shadow).toFixed(3)})`;
+    const crisp = 1 - 0.35 * Math.max(0, Math.min(1, shadowShift - 1));
+    ctx.shadowBlur = shadow <= 0 ? 0 : Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow) * crisp;
+    ctx.shadowOffsetX = cfg.size * 0.04 * shadowShift;
+    ctx.shadowOffsetY = cfg.size * 0.07 * shadowShift;
     ctx.fillStyle = cfg.color;
     const glowLayers = [
       { blur: 0.05, alpha: 0.9 },
@@ -8227,6 +8242,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       "#lyricOpacityOut": `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
       "#lyricPillOpacityOut": `${Math.round(config.lyrics.pillOpacity * 100)}%`,
       "#lyricGlowOut": `${Math.round((config.lyrics.glow ?? 0) * 100)}%`,
+      "#lyricShadowOut": `${Math.round((config.lyrics.shadow ?? 1) * 100)}%`,
+      "#lyricShadowOffsetOut": `${Math.round((config.lyrics.shadowOffset ?? 1) * 100)}%`,
       "#primaryHex": config.primary.toUpperCase(),
       "#secondaryHex": config.secondary.toUpperCase()
     };
@@ -8277,6 +8294,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     });
     setRange("#lyricPillOpacity", Math.round(config.lyrics.pillOpacity * 100));
     setRange("#lyricGlow", Math.round((config.lyrics.glow ?? 0) * 100));
+    setRange("#lyricShadow", Math.round((config.lyrics.shadow ?? 1) * 100));
+    setRange("#lyricShadowOffset", Math.round((config.lyrics.shadowOffset ?? 1) * 100));
     setRange("#seekRange", 0);
     const colorInputs = [
       ["#primary", config.primary],
@@ -8291,6 +8310,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     }
     const sections = document.querySelector("#lyricSections");
     if (sections) sections.checked = config.lyrics.showSections;
+    const boldBox = document.querySelector("#lyricBold");
+    if (boldBox) boldBox.checked = config.lyrics.bold !== false;
     syncPresetGrid(config.preset);
     syncSwatches(config.primary);
     buildSegments(config, segmentHandlers);
@@ -9384,6 +9405,24 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.version += 1;
       const out = document.querySelector("#lyricOffsetOut");
       if (out) out.textContent = `${state.config.lyrics.offset.toFixed(1)} s`;
+    });
+    $("#lyricBold").addEventListener("change", (event) => {
+      state.config.lyrics.bold = event.target.checked;
+      state.version += 1;
+    });
+    $("#lyricShadow").addEventListener("input", (event) => {
+      const percent = Number(event.target.value);
+      state.config.lyrics.shadow = percent / 100;
+      const out = document.querySelector("#lyricShadowOut");
+      if (out) out.textContent = `${percent}%`;
+      state.version += 1;
+    });
+    $("#lyricShadowOffset").addEventListener("input", (event) => {
+      const percent = Number(event.target.value);
+      state.config.lyrics.shadowOffset = percent / 100;
+      const out = document.querySelector("#lyricShadowOffsetOut");
+      if (out) out.textContent = `${percent}%`;
+      state.version += 1;
     });
     $("#lyricSections").addEventListener("change", (event) => {
       state.config.lyrics.showSections = event.target.checked;
