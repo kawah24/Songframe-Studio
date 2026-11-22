@@ -41,6 +41,31 @@ function fontStack(id: Config['text'][number]['font']): string {
  * laid out in 1080-space (short side = 1080) and scaled once up front, so the
  * preview and the export are the same picture at different resolutions.
  */
+/**
+ * Lays a flat black veil over the finished frame.
+ *
+ * renderFrame() leaves the canvas in its centred, scaled space
+ * (setTransform(k, 0, 0, k, width/2, height/2)), so the transform is reset here
+ * first: filling with it in place starts at the middle of the picture and runs
+ * off the bottom-right corner, which is a dark rectangle rather than a fade.
+ */
+export function paintFadeOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  alpha: number,
+): void {
+  if (!(alpha > 0)) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.filter = 'none';
+  ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, alpha).toFixed(3)})`;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
 export function renderFrame(ctx: CanvasRenderingContext2D, width: number, height: number, opts: RenderOptions): void {
   const { config, frame, assets, lyrics, duration, peaks } = opts;
   const k = Math.min(width, height) / 1080;

@@ -401,3 +401,171 @@ stock-photo library.
   change are pixel-identical (delta 0), so the differences are the controls.
 - Tests: *the bold checkbox drives the lyric weight*, *the drop shadow sliders
   reach the config*.
+
+## 1.10.1 - 2026-11-08
+
+- **Fixed: changing the centre image left the old picture on screen.** Choosing a
+  picture, picking one from the library, "Generated art" and "Default logo" all
+  swapped the cover asset without invalidating the preview. The render loop only
+  redraws when the config version changes, so the canvas kept the previous art
+  until some unrelated control moved a slider. `refreshCover()` now bumps the
+  version and the frame repaints on the next animation frame.
+- Background image, background video and the watermark were already invalidating
+  correctly; the centre-art paths were the only ones missing it.
+- Tests: *a centre image change repaints the frame*.
+
+## 1.10.2 - 2026-11-14
+
+- **Fixed: a background clip played on its own while the song was paused.**
+  Loading a video background called `play()` straight away, and
+  `keepBackgroundVideoAlive()` kept it looping whenever the background type was a
+  clip — so the preview ran on its own clock while the transport sat still. The
+  frame on screen had no relation to the song position and the clip landed
+  wherever the loop happened to be, which made judging a look misleading.
+- The clip is now loaded **paused and parked on the playhead**. It plays only
+  while the transport plays (and not while exporting, and not while the frame is
+  frozen), it follows the transport's clock, and it re-seeks itself when it
+  drifts more than 150 ms from the song position. Pausing lands it exactly on the
+  playhead; a seek moves it with the song.
+- Export is unchanged: the clip is still paused and seeked per frame, which is
+  why rendered MP4s were never affected by this.
+- `src/main.ts`: `startBackgroundVideo()` no longer starts playback;
+  `keepBackgroundVideoAlive()` gained the transport check and the drift resync.
+  The "background video ready" toast now says it plays with the song.
+- Verified: `npm run typecheck` clean, `--selftest` 7/7.
+
+## 1.10.3 - 2026-11-14
+
+- **Fixed: a background clip could flicker in a rendered MP4.** 1.10.2 made the
+  clip follow the transport, but the drift resync ran unconditionally — including
+  during a render, where the exporter seeks that element frame by frame. The two
+  fought over `currentTime`, so some frames were drawn from the playhead instead
+  of the requested time: a clip that measured luma ~113 for most frames with
+  isolated frames at ~125, visible as flicker.
+- `keepBackgroundVideoAlive()` now returns early while `state.exporting` is true,
+  pausing the clip and leaving `currentTime` to the exporter. The preview
+  behaviour added in 1.10.2 is unchanged.
+- Any MP4 rendered with 1.10.2 and a clip background needs re-rendering.
+- Verified: `npm run typecheck` clean, `--selftest` 7/7.
+
+## 1.11.0 - 2026-11-18
+
+- **Fade out.** Style → Render range gains a **Fade out** slider, 0-10 s in
+  half-second steps, off by default. It fades the picture to black and the sound
+  to silence over the last N seconds of the file, counted back from the last
+  frame — so an end-silence tail is faded too, and the two effects stack
+  predictably.
+- The preview draws the same fade while the playhead is inside the fader, so the
+  ending can be judged before a render instead of after it.
+- Export applies it on both paths. The WebCodecs loop paints a black overlay
+  using `fadeAlphaAt()`; `encodeAudio()` scales the samples of the final N seconds
+  with the same linear ramp; the MediaRecorder fallback schedules a gain
+  automation on its destination node and overlays the same alpha.
+- Saved looks carry `fadeOut`, and a look saved before 1.11.0 reads as off rather
+  than breaking.
+- Verified: `npm run typecheck` clean. No automated test yet — the fade is
+  visual/audio and the ui-test suite has no transport fixture to assert against,
+  so it was checked by eye in the preview and by measuring a rendered file.
+
+## 1.11.1 - 2026-11-18
+
+- **Fixed: the fade painted a dark rectangle instead of fading the frame.** The
+  overlay was filled while the context was still in renderFrame()'s centred,
+  scaled space (`setTransform(k, 0, 0, k, width/2, height/2)`), so
+  `fillRect(0, 0, width, height)` began at the middle of the picture and ran off
+  the bottom-right corner — a hard-edged block, most obvious on a bright frame.
+- `paintFadeOverlay()` now lives in visualizer.ts, resets the transform to
+  identity before filling, and is used by the export loop, the real-time fallback
+  and the preview, so all three paint the same veil.
+- Any MP4 rendered with 1.11.0 and a fade needs re-rendering.
+- Verified: `npm run typecheck` clean, `--selftest` 7/7.
+
+## 1.12.0 - 2026-11-22
+
+- **Render range by length.** The range row gains an *End at* / *Length* switch. In
+  *Length* the second field is seconds counted from From, so 0:41 + 0:30 is two
+  entries instead of mental arithmetic; *End at* keeps the absolute behaviour.
+- **Times are typed like the timeline.** Both fields accept `m:ss`, `h:mm:ss` or
+  plain seconds and display `m:ss`, rather than raw seconds only.
+- **Audio fade is its own dial.** *Picture fade* and *Audio fade* now sit separately
+  under Render range: the picture ramps to black, the audio ramps to silence, each
+  0-10 s. The preview applies the audio taper live, so what you hear is what the
+  file gets.
+- `rangeStartAt()` / `rangeEndAt()` are the single range rule, shared by the size
+  estimate, the preview and both export paths; `fadeGainAt()` is the single ramp
+  used by the picture overlay, the sample taper and the preview.
+- Dimming gained its first test: the backdrop measures 8 -> 1 mean luma at 0 % and
+  100 %, so the control is wired. It shades the background only, below the
+  visualizer and the type.
+- Verified: `npm run typecheck` clean, `npm run ui-test` PASS with five new checks
+  (dimming, m:ss parsing, Length mode, End mode, independent fades).
+
+## 1.12.1 - 2026-11-22
+
+- **Fixed: the preview went black when the render range started late.** 1.12.0
+  compared the raw playhead against the render length when painting the picture
+  fade, so with From 0:49 and Length 0:30 a playhead at 0:54 read as "past the
+  end" and the whole frame was blacked out. The same mistake ran the audio taper
+  to zero there, muting the preview as well.
+- Both preview hooks now measure elapsed time from the range start and only act
+  while the playhead is inside the range: mid-range stays clear, the final N
+  seconds fade, and a playhead past the range reads normally again. Exports were
+  never affected — the exporter already worked in range-relative time.
+- Tests: *the fade leaves the middle of the range alone*, *the fade reaches black
+  at the range end*, *a playhead past the range is not blacked out* (2761 lit
+  pixels → 0 → 2761).
+
+## 1.13.0 - 2026-11-22
+
+- **Caption width.** TEXT → Lyrics gains a slider, 30-90 % in 5 % steps, default
+  50 %. It replaces the hard-coded `width * 0.5` in lyrics.ts, so a long line can
+  use more of the frame before it wraps instead of being squeezed into a subtitle
+  column. Saved looks without the value read as 50 %, so nothing old changes.
+- The word and row budgets still apply on top: a wider caption fits more words per
+  row, which usually means fewer rows for the same cue and therefore larger type
+  inside the same row budget.
+- Verified: `npm run typecheck` clean, `npm run ui-test` PASS. The new check
+  measures the drawn lyric block at **457 px for 50 %** against **917 px for 90 %**.
+
+## 1.14.0 - 2026-11-23
+
+- **Caption hold.** Lyrics gains a hold control, 0-12 s in half-second steps, off by
+  default. It caps how long a cue may stay on screen, counted from when it appears,
+  and the last 0.45 s fade — so the final line no longer hangs through an
+  instrumental break or the outro. 0 keeps the old rule: until the next cue.
+- The fade multiplies into the same `textAlpha` the whole lyric layer uses, so pill,
+  shadow, glow and karaoke sweep fade together instead of the words disappearing
+  from an opaque block.
+- Off by default deliberately: switching it on shortens any line whose window is
+  longer than the cap, and every look saved before this release assumes the old rule.
+  Set 3 s on a project that has long gaps.
+- Verified: `npm run typecheck` clean, `npm run ui-test` PASS with three new checks
+  (a fresh cue shows, a capped cue clears, hold 0 changes nothing).
+
+## 1.14.1 - 2026-11-23
+
+- **Fixed: the caption fade ran on every cue, not only held ones.** 1.14.0 sized the
+  fade window from the cue's own length, so an ordinary one-second line faded across
+  its last quarter and short cues visibly thinned out before the next line arrived.
+  The fade now applies *only* when the hold is what ends the cue; a cue handing over
+  to the next line stays at full strength right to the handover.
+- **Caption hold now defaults to 3 s.** Two older lyric tests draw at t = 4 and were
+  clipped by that default, so the opacity test pins `hold: 0` — it is about opacity,
+  not about the hold.
+- Verified: `npm run typecheck` clean, `npm run ui-test` PASS.
+
+## 1.14.2 - 2026-11-23
+
+- **Fixed: the hold was measured from the wrong end of the cue, so captions
+  vanished mid-line.** 1.14.1 capped a cue three seconds after it *started*. The SRT
+  files in this project run 5-7 seconds per cue — one sung phrase each — so every
+  line disappeared after 3 s and the rest of the phrase played over an empty frame,
+  which reads as captions not showing at all.
+- The hold now counts from where the line **ends**: the cue's own end when the file
+  gives one (SRT and LRC both do), otherwise the moment the next cue starts. Only
+  the extra seconds after the line fade, 0.45 s of it, and nothing fades while the
+  line is still being sung.
+- `hold: 0` keeps the original rule: visible until the next cue.
+- Verified: `npm run typecheck` clean, `npm run ui-test` PASS. The checks now use a
+  real SRT-shaped cue (0-2 s) and confirm the line survives to 4 s, is gone by 6 s,
+  and that 0 still holds it until the next cue.

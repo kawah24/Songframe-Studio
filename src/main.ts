@@ -2,7 +2,7 @@ import { decodeSong, frameAt, Playback, type Song } from './audio';
 import defaultLogoUrl from './assets/logo.webp';
 import { initialsOf, loadImageFile, loadImageUrl, loadVideoFile, loadVideoUrl, makeCoverArt } from './backgrounds';
 import { fontFamily, hydrateSystemFonts } from './fonts';
-import { estimateSizeMB, exportFrame, exportSeconds, exportVideo, frameSize, type ExportResult } from './export';
+import { audioFadeSeconds, estimateSizeMB, exportFrame, exportSeconds, exportVideo, fadeAlphaAt, fadeGainAt, frameSize, rangeEndAt, rangeStartAt, type ExportResult } from './export';
 import { parseLyrics } from './lyrics';
 import { creditLine, resolveFullSize, type MediaItem } from './media';
 import { createMediaPicker, PATTERN_NAMES } from './media-ui';
@@ -10,7 +10,7 @@ import { applyTheme, currentThemeId, THEMES } from './theme';
 import { ASPECTS, PALETTES, defaultConfig, formatTime, hashString, slugify } from './presets';
 import type { Config, EffectKey, Frame, LyricLine, PresetId, TextLayer } from './types';
 import * as ui from './ui';
-import { renderFrame, type Assets } from './visualizer';
+import { renderFrame, paintFadeOverlay, type Assets } from './visualizer';
 
 const playback = new Playback();
 
@@ -165,6 +165,30 @@ function bytesLabel(bytes: number): string {
  * preview rendering
  * ------------------------------------------------------------------ */
 
+/** "1:42", "41", "0:41.5" -> seconds; null when the text is not a time. */
+function parseClock(text: string): number | null {
+  const raw = text.trim().replace(',', '.');
+  if (!raw) return 0;
+  const parts = raw.split(':');
+  if (parts.length > 3) return null;
+  let total = 0;
+  for (const part of parts) {
+    const value = Number(part);
+    if (!Number.isFinite(value) || value < 0) return null;
+    total = total * 60 + value;
+  }
+  return total;
+}
+
+/** Seconds -> "m:ss", or "m:ss.d" when it does not sit on a whole second. */
+function clockText(seconds: number): string {
+  const value = Math.max(0, Math.round((Number(seconds) || 0) * 10) / 10);
+  const minutes = Math.floor(value / 60);
+  const rest = value - minutes * 60;
+  const whole = Math.round(rest) === rest;
+  return `${minutes}:${whole ? String(rest).padStart(2, '0') : rest.toFixed(1).padStart(4, '0')}`;
+}
+
 function fitFrame(): void {
   const host = document.querySelector<HTMLElement>('#stageFrame');
   const frameEl = document.querySelector<HTMLElement>('#frame');
@@ -197,15 +221,39 @@ function fitFrame(): void {
 
 /**
  * A clip background has to be *played* to move; drawing a paused <video> just
- * repeats its first frame. It is paused while exporting, because the export
- * seeks it frame by frame and playback would fight those seeks.
+ * repeats its first frame. It therefore runs only while the song is playing, and
+ * it follows the transport's clock instead of free-running, so the frame on
+ * screen is the frame that will render at that point of the song. It is paused
+ * while exporting, because the export seeks it frame by frame and playback would
+ * fight those seeks.
  */
 function keepBackgroundVideoAlive(): void {
   const video = state.assets.backgroundVideo;
   if (!video) return;
-  const wanted = state.config.bg === 'video' && !state.exporting;
-  if (!wanted) {
+  const span = video.duration;
+  const loopable = Number.isFinite(span) && span > 0;
+
+  // The exporter seeks this element frame by frame; nothing here may touch
+  // currentTime while it runs, or a render alternates between two frames.
+  if (state.exporting) {
     if (!video.paused) video.pause();
+    return;
+  }
+
+  const wanted = state.config.bg === 'video' && playback.playing && state.frozenTime === null;
+
+  // Follow the playhead: a clip is only ever drawn where the song is.
+  if (loopable) {
+    const target = playback.time % span;
+    const drift = Math.abs(video.currentTime - target);
+    if (drift > 0.15 && drift < span - 0.15) video.currentTime = target;
+  }
+
+  if (!wanted) {
+    if (!video.paused) {
+      video.pause();
+      if (loopable) video.currentTime = playback.time % span;
+    }
     return;
   }
   if (!video.paused) return;
@@ -218,14 +266,19 @@ function keepBackgroundVideoAlive(): void {
   void video.play().catch(() => undefined);
 }
 
+/** Loads the clip paused and parked on the playhead: it starts with the song. */
 function startBackgroundVideo(): void {
   const video = state.assets.backgroundVideo;
   if (!video) return;
   video.muted = true;
   video.loop = true;
   video.playsInline = true;
-  lastVideoRetry = performance.now();
-  void video.play().catch(() => undefined);
+  if (!video.paused) video.pause();
+  const span = video.duration;
+  if (Number.isFinite(span) && span > 0) {
+    video.currentTime = (state.song ? playback.time : 0) % span;
+  }
+  lastVideoRetry = 0;
 }
 
 function demoFrame(time: number): Frame {
@@ -261,6 +314,17 @@ function drawPreview(time: number): void {
     duration: state.song?.duration ?? 24,
     peaks: state.song?.peaks,
   });
+  // The same fade the exporter writes, so the ending can be judged before
+  // rendering. Elapsed time is measured from the range start: comparing the raw
+  // playhead against the render length painted the whole frame black whenever the
+  // playhead sat past the end of a short range.
+  if (state.song) {
+    const rangeStart = rangeStartAt(state.config, state.song.duration);
+    const total = exportSeconds(state.config, state.song.duration);
+    const elapsed = time - rangeStart;
+    const inside = elapsed >= 0 && elapsed <= total;
+    paintFadeOverlay(ctx, canvas.width, canvas.height, inside ? fadeAlphaAt(state.config, elapsed, total) : 0);
+  }
 }
 
 function tick(): void {
@@ -269,6 +333,15 @@ function tick(): void {
   keepBackgroundVideoAlive();
   const duration = state.song?.duration ?? 0;
   const time = state.frozenTime ?? (state.song ? playback.time : (performance.now() / 1000) % 24);
+  // The preview hears the same audio fade the file will get — measured from the
+  // range start, and only inside the range, or a later playhead would mute it.
+  if (state.song) {
+    const rangeStart = rangeStartAt(state.config, state.song.duration);
+    const total = exportSeconds(state.config, state.song.duration);
+    const elapsed = time - rangeStart;
+    const inside = elapsed >= 0 && elapsed <= total;
+    playback.setTaper(inside ? fadeGainAt(audioFadeSeconds(state.config), elapsed, total) : 1);
+  }
   // A playing clip changes on its own, so the frame is never "unchanged".
   const clip = state.assets.backgroundVideo;
   const liveClip = state.config.bg === 'video' && clip !== null && !clip.paused && !state.exporting;
@@ -343,6 +416,8 @@ function syncChrome(): void {
     '#particlesOut': String(config.particles),
     '#qualityOut': `${Math.round(config.quality * 100)}% · ${qualityLabel(config.quality)}`,
     '#endSilenceOut': config.endSilence > 0 ? `${config.endSilence} s` : 'Off',
+    '#fadeOutOut': config.fadeOut > 0 ? `${config.fadeOut} s` : 'Off',
+    '#audioFadeOutOut': config.audioFadeOut > 0 ? `${config.audioFadeOut} s` : 'Off',
     '#dimOut': `${Math.round(config.dim * 100)}%`,
     '#zoomSpeedOut': config.zoomSpeed <= 0 ? 'Off' : `${config.zoomSpeed}x`,
     '#waterScaleOut': `${Math.round(config.watermarkScale * 100)}%`,
@@ -353,6 +428,8 @@ function syncChrome(): void {
     '#opacityOut': `${Math.round(config.visualizerOpacity * 100)}%`,
     '#lyricSizeOut': String(Math.round(config.lyrics.size)),
     '#lyricLinesOut': String(Math.round(config.lyrics.lines)),
+    '#lyricWidthOut': `${Math.round((config.lyrics.width ?? 0.5) * 100)}%`,
+    '#lyricHoldOut': (config.lyrics.hold ?? 0) > 0 ? `${(config.lyrics.hold ?? 0).toFixed(1)} s` : 'Off',
     '#lyricWordsOut': String(Math.round(config.lyrics.maxWords)),
     '#lyricOffsetOut': `${config.lyrics.offset.toFixed(1)} s`,
     '#lyricOpacityOut': `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
@@ -375,11 +452,22 @@ function syncChrome(): void {
   }
 
   const rangeStartInput = document.querySelector<HTMLInputElement>('#rangeStart');
-  if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = String(Math.round(config.rangeStart * 10) / 10);
+  if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = clockText(config.rangeStart);
   const rangeEndInput = document.querySelector<HTMLInputElement>('#rangeEnd');
-  if (rangeEndInput && document.activeElement !== rangeEndInput) rangeEndInput.value = String(Math.round(config.rangeEnd * 10) / 10);
+  if (rangeEndInput && document.activeElement !== rangeEndInput) {
+    rangeEndInput.value = clockText(config.rangeMode === 'length' ? config.rangeLength : config.rangeEnd);
+  }
+  const rangeSecondLabel = document.querySelector<HTMLElement>('#rangeSecondLabel');
+  if (rangeSecondLabel) rangeSecondLabel.textContent = config.rangeMode === 'length' ? 'Length' : 'To';
+  document.querySelectorAll<HTMLElement>('#rangeModeSeg button').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.value === config.rangeMode);
+  });
+  const audioFadeInput = document.querySelector<HTMLInputElement>('#audioFadeOut');
+  if (audioFadeInput && document.activeElement !== audioFadeInput) audioFadeInput.value = String(config.audioFadeOut ?? 0);
   const endSilenceInput = document.querySelector<HTMLInputElement>('#endSilence');
   if (endSilenceInput && document.activeElement !== endSilenceInput) endSilenceInput.value = String(config.endSilence ?? 0);
+  const fadeOutInput = document.querySelector<HTMLInputElement>('#fadeOut');
+  if (fadeOutInput && document.activeElement !== fadeOutInput) fadeOutInput.value = String(config.fadeOut ?? 0);
 
   const setRange = (selector: string, value: number): void => {
     const input = document.querySelector<HTMLInputElement>(selector);
@@ -404,6 +492,8 @@ function syncChrome(): void {
   setRange('#opacity', Math.round(config.visualizerOpacity * 100));
   setRange('#lyricSize', Math.round(config.lyrics.size));
   setRange('#lyricLines', config.lyrics.lines);
+  setRange('#lyricWidth', Math.round((config.lyrics.width ?? 0.5) * 100));
+  setRange('#lyricHold', Math.round((config.lyrics.hold ?? 0) * 2));
   setRange('#lyricWords', config.lyrics.maxWords);
   setRange('#lyricOffset', Math.round(config.lyrics.offset * 10));
   const lyricOpacityPercent = Math.round((config.lyrics.opacity ?? 1) * 100);
@@ -694,6 +784,9 @@ function generatedCover(): HTMLCanvasElement {
  * otherwise the studio's own logo, which ships inside the bundle.
  */
 function refreshCover(): void {
+  // Changing the centre art must invalidate the preview; without this the canvas
+  // kept the old picture until some unrelated control bumped the version.
+  state.version += 1;
   if (state.customCover) {
     state.assets.cover = state.customCover;
     updateCoverThumb();
@@ -826,6 +919,7 @@ async function loadAudio(file: File): Promise<void> {
       state.config.credit = '';
       state.config.rangeStart = 0;
       state.config.rangeEnd = 0;
+      state.config.fadeOut = 0;
       state.backgroundCredit = '';
     state.backgroundPage = '';
       state.centreCredit = '';
@@ -882,7 +976,7 @@ async function loadBackgroundVideo(file: File): Promise<void> {
     state.backgroundCredit = '';
     state.backgroundPage = '';
     syncCredit();
-    ui.toast('Background video ready — it loops for the whole song.');
+    ui.toast('Background video ready — it plays with the song and loops.');
   } catch (error) {
     ui.toast(error instanceof Error ? error.message : 'That video could not be read.', 'err');
   }
@@ -983,8 +1077,8 @@ async function startRender(): Promise<void> {
       assets: state.assets,
       lyrics,
       signal: abortController.signal,
-      startAt: config.rangeStart,
-      endAt: config.rangeEnd,
+      startAt: rangeStartAt(config, song.duration),
+      endAt: rangeEndAt(config, song.duration),
       onProgress: (stage, fraction, detail) => ui.modalProgress(stage, fraction, detail),
     });
 
@@ -1435,15 +1529,44 @@ function bindEvents(): void {
   });
 
   ui.$('#rangeStart').addEventListener('input', (event) => {
-    state.config.rangeStart = Math.max(0, Number((event.target as HTMLInputElement).value) || 0);
+    const parsed = parseClock((event.target as HTMLInputElement).value);
+    if (parsed === null) return;
+    state.config.rangeStart = parsed;
     state.version += 1;
     syncSizeEstimate();
   });
 
   ui.$('#rangeEnd').addEventListener('input', (event) => {
-    state.config.rangeEnd = Math.max(0, Number((event.target as HTMLInputElement).value) || 0);
+    const parsed = parseClock((event.target as HTMLInputElement).value);
+    if (parsed === null) return;
+    if (state.config.rangeMode === 'length') state.config.rangeLength = parsed;
+    else state.config.rangeEnd = parsed;
     state.version += 1;
     syncSizeEstimate();
+  });
+
+  ui.buildSeg(
+    '#rangeModeSeg',
+    [
+      { value: 'end', label: 'End at', hint: 'The second field is the time the render stops' },
+      { value: 'length', label: 'Length', hint: 'The second field is seconds counted from From' },
+    ],
+    state.config.rangeMode,
+    (value) => {
+      state.config.rangeMode = value === 'length' ? 'length' : 'end';
+      state.version += 1;
+      syncChrome();
+      syncSizeEstimate();
+    },
+    true,
+  );
+
+  ui.$('#audioFadeOut').addEventListener('input', (event) => {
+    const raw = Number((event.target as HTMLInputElement).value);
+    state.config.audioFadeOut = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 0;
+    state.version += 1;
+    const out = document.querySelector('#audioFadeOutOut');
+    if (out) out.textContent = state.config.audioFadeOut > 0 ? `${state.config.audioFadeOut} s` : 'Off';
   });
 
   ui.$('#endSilence').addEventListener('input', (event) => {
@@ -1453,6 +1576,14 @@ function bindEvents(): void {
     const out = document.querySelector('#endSilenceOut');
     if (out) out.textContent = state.config.endSilence > 0 ? `${state.config.endSilence} s` : 'Off';
     syncSizeEstimate();
+  });
+
+  ui.$('#fadeOut').addEventListener('input', (event) => {
+    const raw = Number((event.target as HTMLInputElement).value);
+    state.config.fadeOut = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 0;
+    state.version += 1;
+    const out = document.querySelector('#fadeOutOut');
+    if (out) out.textContent = state.config.fadeOut > 0 ? `${state.config.fadeOut} s` : 'Off';
   });
 
   ui.$('#btnRangePlayhead').addEventListener('click', () => {
@@ -1635,6 +1766,23 @@ function bindEvents(): void {
     state.version += 1;
     const out = document.querySelector('#lyricLinesOut');
     if (out) out.textContent = String(state.config.lyrics.lines);
+  });
+
+  ui.$('#lyricWidth').addEventListener('input', (event) => {
+    const value = Math.max(0.2, Math.min(1, Number((event.target as HTMLInputElement).value) / 100));
+    state.config.lyrics.width = value;
+    state.version += 1;
+    const out = document.querySelector('#lyricWidthOut');
+    if (out) out.textContent = `${Math.round(value * 100)}%`;
+  });
+
+  ui.$('#lyricHold').addEventListener('input', (event) => {
+    const raw = Number((event.target as HTMLInputElement).value);
+    const value = Number.isFinite(raw) ? Math.max(0, Math.min(12, raw)) : 0;
+    state.config.lyrics.hold = value;
+    state.version += 1;
+    const out = document.querySelector('#lyricHoldOut');
+    if (out) out.textContent = value > 0 ? `${value.toFixed(1)} s` : 'Off';
   });
 
   ui.$('#lyricWords').addEventListener('input', (event) => {
@@ -2016,8 +2164,8 @@ function boot(): void {
           config,
           assets: state.assets,
           lyrics: state.lyrics,
-          startAt: config.rangeStart,
-          endAt: config.rangeEnd,
+          startAt: rangeStartAt(config, state.song.duration),
+          endAt: rangeEndAt(config, state.song.duration),
           maxSeconds: options?.maxSeconds,
         });
         state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate, duration: result.duration };

@@ -87,6 +87,8 @@ export function frameAt(song: Song, time: number, sensitivity = 1): Frame {
 export class Playback {
   readonly ctx: AudioContext;
   private readonly gain: GainNode;
+  /** Extra gain the preview uses for the audio fade; 1 is untrimmed. */
+  private readonly taper: GainNode;
   private source: AudioBufferSourceNode | null = null;
   private song: Song | null = null;
   private startedAt = 0;
@@ -99,6 +101,9 @@ export class Playback {
     this.ctx = new AudioContext({ sampleRate: TARGET_RATE, latencyHint: 'interactive' });
     this.gain = this.ctx.createGain();
     this.gain.gain.value = this.volume;
+    this.taper = this.ctx.createGain();
+    this.taper.gain.value = 1;
+    this.taper.connect(this.gain);
     this.gain.connect(this.ctx.destination);
   }
 
@@ -124,6 +129,11 @@ export class Playback {
     this.gain.gain.value = this.volume;
   }
 
+  /** Trims the signal without touching the volume slider: 1 = untouched, 0 = silent. */
+  setTaper(value: number): void {
+    this.taper.gain.value = Math.max(0, Math.min(1, value));
+  }
+
   getVolume(): number {
     return this.volume;
   }
@@ -134,7 +144,7 @@ export class Playback {
     this.stopSource();
     const source = this.ctx.createBufferSource();
     source.buffer = this.song.buffer;
-    source.connect(this.gain);
+    source.connect(this.taper);
     const startAt = Math.max(0, Math.min(this.song.duration - 0.01, from));
     source.onended = () => {
       if (this.source === source && this.playing) {

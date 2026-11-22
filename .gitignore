@@ -1,8 +1,11 @@
 node_modules/
 .venv/
 desktop/build/
+desktop/build_new/
 desktop/dist/
+desktop/dist_new/
 desktop/Songframe.spec
+desktop/Songframe-new.spec
 tools/out/
 releases/
 *.log

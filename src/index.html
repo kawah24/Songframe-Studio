@@ -118,16 +118,27 @@
                   <p class="hint" id="qualitySize">Estimated file: load a song to see the size.</p>
                 </div>
                 <span class="label spaced">Render range</span>
+                <div class="seg tight" id="rangeModeSeg"></div>
                 <div class="range-row">
-                  <label class="range-field"><span>From</span><input type="number" id="rangeStart" min="0" step="0.1" value="0" /></label>
-                  <label class="range-field"><span>To</span><input type="number" id="rangeEnd" min="0" step="0.1" value="0" /></label>
+                  <label class="range-field"><span>From</span><input type="text" id="rangeStart" inputmode="numeric" value="0:00" /></label>
+                  <label class="range-field"><span id="rangeSecondLabel">To</span><input type="text" id="rangeEnd" inputmode="numeric" value="0:00" /></label>
                 </div>
                 <button class="btn ghost small" id="btnRangePlayhead" type="button">Start at the playhead</button>
-                <p class="hint">Seconds. Leave “To” at 0 to render to the end of the song.</p>
+                <p class="hint">Times as m:ss or plain seconds. In <b>Length</b> mode the second field counts from From; 0:00 means to the end of the song.</p>
                 <div class="field">
                   <div class="field-top"><label for="endSilence">End silence</label><output id="endSilenceOut">Off</output></div>
                   <input type="range" id="endSilence" min="0" max="15" step="0.5" value="0" />
                   <p class="hint">True digital silence appended after the last note, for tracklist gaps. Export only - the preview still ends with the song.</p>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="fadeOut">Picture fade</label><output id="fadeOutOut">Off</output></div>
+                  <input type="range" id="fadeOut" min="0" max="10" step="0.5" value="0" />
+                  <p class="hint">Seconds the picture fades to black at the end, counted back from the last frame. The preview shows it live.</p>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="audioFadeOut">Audio fade</label><output id="audioFadeOutOut">Off</output></div>
+                  <input type="range" id="audioFadeOut" min="0" max="10" step="0.5" value="0" />
+                  <p class="hint">Seconds the sound ramps to silence at the end, independent of the picture fade.</p>
                 </div>
               </div>
 
@@ -258,6 +269,16 @@
                   <div class="field">
                     <div class="field-top"><label for="lyricLines">Visible lines</label><output id="lyricLinesOut">2</output></div>
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricWidth">Caption width</label><output id="lyricWidthOut">50%</output></div>
+                    <input type="range" id="lyricWidth" min="30" max="90" step="5" value="50" />
+                    <p class="hint">Share of the frame a caption line may use before it wraps. 50% keeps a subtitle feel; 70–90% fits more words per row.</p>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricHold">Caption hold</label><output id="lyricHoldOut">3.0 s</output></div>
+                    <input type="range" id="lyricHold" min="0" max="12" step="0.5" value="3" />
+                    <p class="hint">Longest a line may stay up, counted from when it appears, then it fades over 0.45 s. Keeps the last line from hanging through a solo or the outro. 0 = until the next line.</p>
                   </div>
                   <div class="field">
                     <div class="field-top"><label for="lyricWords">Words per line</label><output id="lyricWordsOut">8</output></div>

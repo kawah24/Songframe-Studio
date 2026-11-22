@@ -74,6 +74,10 @@ export interface LyricsConfig {
   lines: number;
   /** Longest cue in words; longer lines are split into more cues. */
   maxWords: number;
+  /** Share of the frame width captions may use, 0.2..1; absent means 50 %. */
+  width?: number;
+  /** Longest time a cue may stay on screen, in seconds; 0 or absent = until the next cue. */
+  hold?: number;
   showSections: boolean;
   color: string;
   highlight: string;
@@ -92,8 +96,16 @@ export interface Config {
   /** Render range in seconds; 0 / 0 means the whole song. */
   rangeStart: number;
   rangeEnd: number;
+  /** Whether the second field is an absolute end time or a length after the start. */
+  rangeMode: 'end' | 'length';
+  /** Seconds after rangeStart when rangeMode is 'length'; 0 = to the end. */
+  rangeLength: number;
   /** Seconds of true digital silence appended after the last note; 0 = off. */
   endSilence: number;
+  /** Seconds the picture fades to black at the end of the render; 0 = off. */
+  fadeOut: number;
+  /** Seconds the audio ramps to silence at the end of the render; 0 = off. */
+  audioFadeOut: number;
   /** Short side of the exported picture, in pixels. */
   height: 1080 | 720 | 480;
   fps: 24 | 30 | 60;

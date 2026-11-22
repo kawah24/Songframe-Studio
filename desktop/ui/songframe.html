@@ -2165,16 +2165,27 @@ body.is-modal {
                   <p class="hint" id="qualitySize">Estimated file: load a song to see the size.</p>
                 </div>
                 <span class="label spaced">Render range</span>
+                <div class="seg tight" id="rangeModeSeg"></div>
                 <div class="range-row">
-                  <label class="range-field"><span>From</span><input type="number" id="rangeStart" min="0" step="0.1" value="0" /></label>
-                  <label class="range-field"><span>To</span><input type="number" id="rangeEnd" min="0" step="0.1" value="0" /></label>
+                  <label class="range-field"><span>From</span><input type="text" id="rangeStart" inputmode="numeric" value="0:00" /></label>
+                  <label class="range-field"><span id="rangeSecondLabel">To</span><input type="text" id="rangeEnd" inputmode="numeric" value="0:00" /></label>
                 </div>
                 <button class="btn ghost small" id="btnRangePlayhead" type="button">Start at the playhead</button>
-                <p class="hint">Seconds. Leave “To” at 0 to render to the end of the song.</p>
+                <p class="hint">Times as m:ss or plain seconds. In <b>Length</b> mode the second field counts from From; 0:00 means to the end of the song.</p>
                 <div class="field">
                   <div class="field-top"><label for="endSilence">End silence</label><output id="endSilenceOut">Off</output></div>
                   <input type="range" id="endSilence" min="0" max="15" step="0.5" value="0" />
                   <p class="hint">True digital silence appended after the last note, for tracklist gaps. Export only - the preview still ends with the song.</p>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="fadeOut">Picture fade</label><output id="fadeOutOut">Off</output></div>
+                  <input type="range" id="fadeOut" min="0" max="10" step="0.5" value="0" />
+                  <p class="hint">Seconds the picture fades to black at the end, counted back from the last frame. The preview shows it live.</p>
+                </div>
+                <div class="field">
+                  <div class="field-top"><label for="audioFadeOut">Audio fade</label><output id="audioFadeOutOut">Off</output></div>
+                  <input type="range" id="audioFadeOut" min="0" max="10" step="0.5" value="0" />
+                  <p class="hint">Seconds the sound ramps to silence at the end, independent of the picture fade.</p>
                 </div>
               </div>
 
@@ -2305,6 +2316,16 @@ body.is-modal {
                   <div class="field">
                     <div class="field-top"><label for="lyricLines">Visible lines</label><output id="lyricLinesOut">2</output></div>
                     <input type="range" id="lyricLines" min="1" max="4" step="1" value="2" />
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricWidth">Caption width</label><output id="lyricWidthOut">50%</output></div>
+                    <input type="range" id="lyricWidth" min="30" max="90" step="5" value="50" />
+                    <p class="hint">Share of the frame a caption line may use before it wraps. 50% keeps a subtitle feel; 70–90% fits more words per row.</p>
+                  </div>
+                  <div class="field">
+                    <div class="field-top"><label for="lyricHold">Caption hold</label><output id="lyricHoldOut">3.0 s</output></div>
+                    <input type="range" id="lyricHold" min="0" max="12" step="0.5" value="3" />
+                    <p class="hint">Longest a line may stay up, counted from when it appears, then it fades over 0.45 s. Keeps the last line from hanging through a solo or the outro. 0 = until the next line.</p>
                   </div>
                   <div class="field">
                     <div class="field-top"><label for="lyricWords">Words per line</label><output id="lyricWordsOut">8</output></div>
@@ -2653,6 +2674,8 @@ body.is-modal {
   var Playback = class {
     ctx;
     gain;
+    /** Extra gain the preview uses for the audio fade; 1 is untrimmed. */
+    taper;
     source = null;
     song = null;
     startedAt = 0;
@@ -2664,6 +2687,9 @@ body.is-modal {
       this.ctx = new AudioContext({ sampleRate: TARGET_RATE, latencyHint: "interactive" });
       this.gain = this.ctx.createGain();
       this.gain.gain.value = this.volume;
+      this.taper = this.ctx.createGain();
+      this.taper.gain.value = 1;
+      this.taper.connect(this.gain);
       this.gain.connect(this.ctx.destination);
     }
     setSong(song) {
@@ -2684,6 +2710,10 @@ body.is-modal {
       this.volume = Math.max(0, Math.min(1, value));
       this.gain.gain.value = this.volume;
     }
+    /** Trims the signal without touching the volume slider: 1 = untouched, 0 = silent. */
+    setTaper(value) {
+      this.taper.gain.value = Math.max(0, Math.min(1, value));
+    }
     getVolume() {
       return this.volume;
     }
@@ -2693,7 +2723,7 @@ body.is-modal {
       this.stopSource();
       const source = this.ctx.createBufferSource();
       source.buffer = this.song.buffer;
-      source.connect(this.gain);
+      source.connect(this.taper);
       const startAt = Math.max(0, Math.min(this.song.duration - 0.01, from));
       source.onended = () => {
         if (this.source === source && this.playing) {
@@ -2840,7 +2870,11 @@ body.is-modal {
     secondary: "#8b5cf6",
     rangeStart: 0,
     rangeEnd: 0,
+    rangeMode: "end",
+    rangeLength: 0,
     endSilence: 0,
+    fadeOut: 0,
+    audioFadeOut: 0,
     aspect: "16:9",
     height: 1080,
     fps: 30,
@@ -2881,6 +2915,8 @@ body.is-modal {
       size: 46,
       lines: 2,
       maxWords: 8,
+      width: 0.5,
+      hold: 3,
       showSections: false,
       color: "#ffffff",
       highlight: "#ec4899",
@@ -5553,10 +5589,19 @@ If you want to offset all timestamps of a track such that the first one is zero,
     }
     const current = lines[index];
     const nextTime = current.end && current.end > current.time ? current.end : index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
+    const nextCue = index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
+    const ownEnd = current.end && current.end > current.time ? current.end : null;
+    const hold = Number(cfg.hold);
+    const extra = Number.isFinite(hold) && hold > 0 ? Math.min(12, hold) : 0;
+    const end = extra > 0 ? (ownEnd ?? nextCue) + extra : nextCue;
+    if (end <= t) return;
+    const fading = extra > 0 && ownEnd !== null && t > ownEnd;
+    const fadeAlpha = fading ? Math.max(0, Math.min(1, (end - t) / Math.min(0.45, extra))) : 1;
     const y = cfg.pos === "bottom" ? height * 0.5 - height * 0.115 : cfg.pos === "top" ? -height * 0.5 + height * 0.115 : 0;
     const pill = rgba(cfg.pill, cfg.pillOpacity);
     const family = fontFamily(cfg.font);
-    const maxWidth = width * 0.5;
+    const share = Math.max(0.2, Math.min(1, cfg.width ?? 0.5));
+    const maxWidth = width * share;
     const layout = (text, requested, maxRows) => {
       let size = Math.max(8, requested);
       let rows = [];
@@ -5612,7 +5657,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const glow = Math.max(0, Math.min(1, cfg.glow ?? 0));
     const shadow = Math.max(0, Math.min(1, cfg.shadow ?? 1));
     const shadowShift = Math.max(0, Math.min(2, cfg.shadowOffset ?? 1));
-    const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1));
+    const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1)) * fadeAlpha;
     ctx.shadowColor = shadow <= 0 ? "transparent" : `rgba(0,0,0,${((0.9 - 0.5 * glow) * textAlpha * shadow).toFixed(3)})`;
     const crisp = 1 - 0.35 * Math.max(0, Math.min(1, shadowShift - 1));
     ctx.shadowBlur = shadow <= 0 ? 0 : Math.max(9, cfg.size * 0.2) * (1 - 0.35 * glow) * crisp;
@@ -5760,6 +5805,17 @@ If you want to offset all timestamps of a track such that the first one is zero,
   }
   function fontStack(id) {
     return fontFamily(id);
+  }
+  function paintFadeOverlay(ctx, width, height, alpha) {
+    if (!(alpha > 0)) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.filter = "none";
+    ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, alpha).toFixed(3)})`;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
   }
   function renderFrame(ctx, width, height, opts) {
     const { config, frame, assets, lyrics, duration, peaks } = opts;
@@ -6682,12 +6738,19 @@ If you want to offset all timestamps of a track such that the first one is zero,
   function bitrateFor(width, height, fps, quality) {
     return Math.round(width * height * fps * 0.12 * Math.max(0.4, quality));
   }
+  function rangeStartAt(config, songDuration) {
+    if (!songDuration) return 0;
+    return Math.max(0, Math.min(songDuration - 0.1, config.rangeStart || 0));
+  }
+  function rangeEndAt(config, songDuration) {
+    if (!songDuration) return 0;
+    const start = rangeStartAt(config, songDuration);
+    const wanted = config.rangeMode === "length" ? config.rangeLength > 0 ? start + config.rangeLength : songDuration : config.rangeEnd && config.rangeEnd > start ? config.rangeEnd : songDuration;
+    return Math.max(start + 0.2, Math.min(songDuration, wanted));
+  }
   function renderSeconds(config, songDuration) {
     if (!songDuration) return 0;
-    const start = Math.max(0, Math.min(songDuration - 0.1, config.rangeStart || 0));
-    const wantedEnd = config.rangeEnd && config.rangeEnd > start ? config.rangeEnd : songDuration;
-    const end = Math.max(start + 0.2, Math.min(songDuration, wantedEnd));
-    return Math.max(0.2, end - start);
+    return Math.max(0.2, rangeEndAt(config, songDuration) - rangeStartAt(config, songDuration));
   }
   function tailSeconds(config) {
     const value = Number(config.endSilence);
@@ -6697,6 +6760,25 @@ If you want to offset all timestamps of a track such that the first one is zero,
   function exportSeconds(config, songDuration) {
     const body = renderSeconds(config, songDuration);
     return body > 0 ? body + tailSeconds(config) : 0;
+  }
+  function fadeSeconds(config) {
+    const value = Number(config.fadeOut);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Math.min(15, Math.round(value * 10) / 10);
+  }
+  function audioFadeSeconds(config) {
+    const value = Number(config.audioFadeOut);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Math.min(15, Math.round(value * 10) / 10);
+  }
+  function fadeGainAt(fade, elapsed, duration) {
+    if (fade <= 0 || duration <= 0) return 1;
+    const remaining = duration - elapsed;
+    if (remaining >= fade) return 1;
+    return Math.max(0, Math.min(1, remaining / fade));
+  }
+  function fadeAlphaAt(config, elapsed, duration) {
+    return 1 - fadeGainAt(fadeSeconds(config), elapsed, duration);
   }
   function estimateSizeMB(config, seconds2) {
     if (!seconds2) return 0;
@@ -6836,7 +6918,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (config.bg === "video" && assets.backgroundVideo && !assets.backgroundVideo.paused) {
         assets.backgroundVideo.pause();
       }
-      await encodeAudio(song, muxer, onProgress, support.audioBitrate, signal, start, start + duration);
+      await encodeAudio(song, muxer, onProgress, support.audioBitrate, signal, start, start + duration, audioFadeSeconds(config));
       const step = 1 / fps;
       const frameDuration = Math.round(1e6 / fps);
       for (let i = 0; i < totalFrames; i++) {
@@ -6846,6 +6928,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
         const frame = frameAt(song, time, config.sensitivity);
         if (config.bg === "video" && assets.backgroundVideo) await seekVideo(assets.backgroundVideo, time);
         renderFrame(ctx, width, height, { config, frame, assets, lyrics, duration: song.duration, peaks: song.peaks });
+        paintFadeOverlay(ctx, width, height, fadeAlphaAt(config, time - start, duration));
         const videoFrame = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: frameDuration });
         videoEncoder.encode(videoFrame, { keyFrame: i % (fps * 2) === 0 });
         videoFrame.close();
@@ -6868,7 +6951,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       throw error;
     }
   }
-  async function encodeAudio(song, muxer, onProgress, audioBitrate, signal, from = 0, to = song.duration) {
+  async function encodeAudio(song, muxer, onProgress, audioBitrate, signal, from = 0, to = song.duration, fade = 0) {
     const left = song.buffer.getChannelData(0);
     const right = song.buffer.numberOfChannels > 1 ? song.buffer.getChannelData(1) : left;
     const startSample = Math.max(0, Math.round(from * TARGET_RATE));
@@ -6902,6 +6985,16 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const planar = new Float32Array(count * 2);
       planar.set(left.subarray(at, at + count), 0);
       planar.set(right.subarray(at, at + count), count);
+      if (fade > 0) {
+        const fadeFrom = to - fade;
+        for (let j = 0; j < count; j++) {
+          const seconds2 = (at + j) / TARGET_RATE;
+          if (seconds2 <= fadeFrom) continue;
+          const gain = Math.max(0, Math.min(1, (to - seconds2) / fade));
+          planar[j] *= gain;
+          planar[count + j] *= gain;
+        }
+      }
       const data = new AudioData({
         format: "f32-planar",
         sampleRate: TARGET_RATE,
@@ -6929,7 +7022,10 @@ If you want to offset all timestamps of a track such that the first one is zero,
     const destination = audioCtx.createMediaStreamDestination();
     const source = audioCtx.createBufferSource();
     source.buffer = song.buffer;
-    source.connect(destination);
+    const fadeGain = audioCtx.createGain();
+    fadeGain.gain.value = 1;
+    source.connect(fadeGain);
+    fadeGain.connect(destination);
     const stream = canvas.captureStream(config.fps);
     destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
     const mime = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((type) => {
@@ -6954,6 +7050,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
     });
     onProgress?.("Recording in real time", 0.01);
     await audioCtx.resume();
+    const fade = audioFadeSeconds(config);
+    if (fade > 0 && duration > fade) {
+      const rampAt = audioCtx.currentTime;
+      fadeGain.gain.setValueAtTime(1, rampAt + Math.max(0, duration - fade));
+      fadeGain.gain.linearRampToValueAtTime(0, rampAt + duration);
+    }
     recorder.start(1e3);
     source.start(0, Math.max(0, request.startAt ?? 0));
     try {
@@ -6970,6 +7072,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
           const t = Math.min(duration, elapsed);
           const frame = frameAt(song, (request.startAt ?? 0) + t, config.sensitivity);
           renderFrame(ctx, width, height, { config, frame, assets, lyrics, duration: song.duration, peaks: song.peaks });
+          paintFadeOverlay(ctx, width, height, fadeAlphaAt(config, t, duration));
           onProgress?.("Recording in real time", Math.min(0.97, t / duration), `${t.toFixed(1)}s / ${duration.toFixed(1)}s`);
           if (elapsed >= duration) {
             resolve();
@@ -8078,6 +8181,26 @@ If you want to offset all timestamps of a track such that the first one is zero,
     if (bytes2 < 1024 * 1024) return `${(bytes2 / 1024).toFixed(0)} KB`;
     return `${(bytes2 / 1024 / 1024).toFixed(1)} MB`;
   }
+  function parseClock(text) {
+    const raw = text.trim().replace(",", ".");
+    if (!raw) return 0;
+    const parts = raw.split(":");
+    if (parts.length > 3) return null;
+    let total = 0;
+    for (const part of parts) {
+      const value = Number(part);
+      if (!Number.isFinite(value) || value < 0) return null;
+      total = total * 60 + value;
+    }
+    return total;
+  }
+  function clockText(seconds2) {
+    const value = Math.max(0, Math.round((Number(seconds2) || 0) * 10) / 10);
+    const minutes = Math.floor(value / 60);
+    const rest = value - minutes * 60;
+    const whole = Math.round(rest) === rest;
+    return `${minutes}:${whole ? String(rest).padStart(2, "0") : rest.toFixed(1).padStart(4, "0")}`;
+  }
   function fitFrame() {
     const host = document.querySelector("#stageFrame");
     const frameEl = document.querySelector("#frame");
@@ -8110,9 +8233,23 @@ If you want to offset all timestamps of a track such that the first one is zero,
   function keepBackgroundVideoAlive() {
     const video = state.assets.backgroundVideo;
     if (!video) return;
-    const wanted = state.config.bg === "video" && !state.exporting;
-    if (!wanted) {
+    const span = video.duration;
+    const loopable = Number.isFinite(span) && span > 0;
+    if (state.exporting) {
       if (!video.paused) video.pause();
+      return;
+    }
+    const wanted = state.config.bg === "video" && playback.playing && state.frozenTime === null;
+    if (loopable) {
+      const target = playback.time % span;
+      const drift = Math.abs(video.currentTime - target);
+      if (drift > 0.15 && drift < span - 0.15) video.currentTime = target;
+    }
+    if (!wanted) {
+      if (!video.paused) {
+        video.pause();
+        if (loopable) video.currentTime = playback.time % span;
+      }
       return;
     }
     if (!video.paused) return;
@@ -8130,8 +8267,12 @@ If you want to offset all timestamps of a track such that the first one is zero,
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
-    lastVideoRetry = performance.now();
-    void video.play().catch(() => void 0);
+    if (!video.paused) video.pause();
+    const span = video.duration;
+    if (Number.isFinite(span) && span > 0) {
+      video.currentTime = (state.song ? playback.time : 0) % span;
+    }
+    lastVideoRetry = 0;
   }
   function demoFrame(time) {
     const bands = new Float32Array(96);
@@ -8161,6 +8302,13 @@ If you want to offset all timestamps of a track such that the first one is zero,
       duration: state.song?.duration ?? 24,
       peaks: state.song?.peaks
     });
+    if (state.song) {
+      const rangeStart = rangeStartAt(state.config, state.song.duration);
+      const total = exportSeconds(state.config, state.song.duration);
+      const elapsed = time - rangeStart;
+      const inside = elapsed >= 0 && elapsed <= total;
+      paintFadeOverlay(ctx, canvas.width, canvas.height, inside ? fadeAlphaAt(state.config, elapsed, total) : 0);
+    }
   }
   function tick() {
     requestAnimationFrame(tick);
@@ -8168,6 +8316,13 @@ If you want to offset all timestamps of a track such that the first one is zero,
     keepBackgroundVideoAlive();
     const duration = state.song?.duration ?? 0;
     const time = state.frozenTime ?? (state.song ? playback.time : performance.now() / 1e3 % 24);
+    if (state.song) {
+      const rangeStart = rangeStartAt(state.config, state.song.duration);
+      const total = exportSeconds(state.config, state.song.duration);
+      const elapsed = time - rangeStart;
+      const inside = elapsed >= 0 && elapsed <= total;
+      playback.setTaper(inside ? fadeGainAt(audioFadeSeconds(state.config), elapsed, total) : 1);
+    }
     const clip = state.assets.backgroundVideo;
     const liveClip = state.config.bg === "video" && clip !== null && !clip.paused && !state.exporting;
     const key = liveClip ? `${time.toFixed(3)}|${state.version}|${clip.currentTime.toFixed(3)}|clip` : `${time.toFixed(3)}|${state.version}|${state.config.aspect}|${state.song ? "song" : "demo"}`;
@@ -8227,6 +8382,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       "#particlesOut": String(config.particles),
       "#qualityOut": `${Math.round(config.quality * 100)}% \xB7 ${qualityLabel(config.quality)}`,
       "#endSilenceOut": config.endSilence > 0 ? `${config.endSilence} s` : "Off",
+      "#fadeOutOut": config.fadeOut > 0 ? `${config.fadeOut} s` : "Off",
+      "#audioFadeOutOut": config.audioFadeOut > 0 ? `${config.audioFadeOut} s` : "Off",
       "#dimOut": `${Math.round(config.dim * 100)}%`,
       "#zoomSpeedOut": config.zoomSpeed <= 0 ? "Off" : `${config.zoomSpeed}x`,
       "#waterScaleOut": `${Math.round(config.watermarkScale * 100)}%`,
@@ -8237,6 +8394,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
       "#opacityOut": `${Math.round(config.visualizerOpacity * 100)}%`,
       "#lyricSizeOut": String(Math.round(config.lyrics.size)),
       "#lyricLinesOut": String(Math.round(config.lyrics.lines)),
+      "#lyricWidthOut": `${Math.round((config.lyrics.width ?? 0.5) * 100)}%`,
+      "#lyricHoldOut": (config.lyrics.hold ?? 0) > 0 ? `${(config.lyrics.hold ?? 0).toFixed(1)} s` : "Off",
       "#lyricWordsOut": String(Math.round(config.lyrics.maxWords)),
       "#lyricOffsetOut": `${config.lyrics.offset.toFixed(1)} s`,
       "#lyricOpacityOut": `${Math.round((config.lyrics.opacity ?? 1) * 100)}%`,
@@ -8257,11 +8416,22 @@ If you want to offset all timestamps of a track such that the first one is zero,
       else if (document.activeElement !== lyricFont) lyricFont.value = config.lyrics.font;
     }
     const rangeStartInput = document.querySelector("#rangeStart");
-    if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = String(Math.round(config.rangeStart * 10) / 10);
+    if (rangeStartInput && document.activeElement !== rangeStartInput) rangeStartInput.value = clockText(config.rangeStart);
     const rangeEndInput = document.querySelector("#rangeEnd");
-    if (rangeEndInput && document.activeElement !== rangeEndInput) rangeEndInput.value = String(Math.round(config.rangeEnd * 10) / 10);
+    if (rangeEndInput && document.activeElement !== rangeEndInput) {
+      rangeEndInput.value = clockText(config.rangeMode === "length" ? config.rangeLength : config.rangeEnd);
+    }
+    const rangeSecondLabel = document.querySelector("#rangeSecondLabel");
+    if (rangeSecondLabel) rangeSecondLabel.textContent = config.rangeMode === "length" ? "Length" : "To";
+    document.querySelectorAll("#rangeModeSeg button").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.value === config.rangeMode);
+    });
+    const audioFadeInput = document.querySelector("#audioFadeOut");
+    if (audioFadeInput && document.activeElement !== audioFadeInput) audioFadeInput.value = String(config.audioFadeOut ?? 0);
     const endSilenceInput = document.querySelector("#endSilence");
     if (endSilenceInput && document.activeElement !== endSilenceInput) endSilenceInput.value = String(config.endSilence ?? 0);
+    const fadeOutInput = document.querySelector("#fadeOut");
+    if (fadeOutInput && document.activeElement !== fadeOutInput) fadeOutInput.value = String(config.fadeOut ?? 0);
     const setRange = (selector, value) => {
       const input = document.querySelector(selector);
       if (!input || document.activeElement === input) return;
@@ -8285,6 +8455,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
     setRange("#opacity", Math.round(config.visualizerOpacity * 100));
     setRange("#lyricSize", Math.round(config.lyrics.size));
     setRange("#lyricLines", config.lyrics.lines);
+    setRange("#lyricWidth", Math.round((config.lyrics.width ?? 0.5) * 100));
+    setRange("#lyricHold", Math.round((config.lyrics.hold ?? 0) * 2));
     setRange("#lyricWords", config.lyrics.maxWords);
     setRange("#lyricOffset", Math.round(config.lyrics.offset * 10));
     const lyricOpacityPercent = Math.round((config.lyrics.opacity ?? 1) * 100);
@@ -8553,6 +8725,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
     return state.generatedCover;
   }
   function refreshCover() {
+    state.version += 1;
     if (state.customCover) {
       state.assets.cover = state.customCover;
       updateCoverThumb();
@@ -8670,6 +8843,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
         state.config.credit = "";
         state.config.rangeStart = 0;
         state.config.rangeEnd = 0;
+        state.config.fadeOut = 0;
         state.backgroundCredit = "";
         state.backgroundPage = "";
         state.centreCredit = "";
@@ -8726,7 +8900,7 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.backgroundCredit = "";
       state.backgroundPage = "";
       syncCredit();
-      toast("Background video ready \u2014 it loops for the whole song.");
+      toast("Background video ready \u2014 it plays with the song and loops.");
     } catch (error) {
       toast(error instanceof Error ? error.message : "That video could not be read.", "err");
     }
@@ -8816,8 +8990,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
         assets: state.assets,
         lyrics,
         signal: abortController.signal,
-        startAt: config.rangeStart,
-        endAt: config.rangeEnd,
+        startAt: rangeStartAt(config, song.duration),
+        endAt: rangeEndAt(config, song.duration),
         onProgress: (stage, fraction, detail) => modalProgress(stage, fraction, detail)
       });
       const realtime = result.mode === "mediarecorder";
@@ -9196,14 +9370,41 @@ If you want to offset all timestamps of a track such that the first one is zero,
       if (out) out.textContent = String(value);
     });
     $("#rangeStart").addEventListener("input", (event) => {
-      state.config.rangeStart = Math.max(0, Number(event.target.value) || 0);
+      const parsed = parseClock(event.target.value);
+      if (parsed === null) return;
+      state.config.rangeStart = parsed;
       state.version += 1;
       syncSizeEstimate();
     });
     $("#rangeEnd").addEventListener("input", (event) => {
-      state.config.rangeEnd = Math.max(0, Number(event.target.value) || 0);
+      const parsed = parseClock(event.target.value);
+      if (parsed === null) return;
+      if (state.config.rangeMode === "length") state.config.rangeLength = parsed;
+      else state.config.rangeEnd = parsed;
       state.version += 1;
       syncSizeEstimate();
+    });
+    buildSeg(
+      "#rangeModeSeg",
+      [
+        { value: "end", label: "End at", hint: "The second field is the time the render stops" },
+        { value: "length", label: "Length", hint: "The second field is seconds counted from From" }
+      ],
+      state.config.rangeMode,
+      (value) => {
+        state.config.rangeMode = value === "length" ? "length" : "end";
+        state.version += 1;
+        syncChrome();
+        syncSizeEstimate();
+      },
+      true
+    );
+    $("#audioFadeOut").addEventListener("input", (event) => {
+      const raw = Number(event.target.value);
+      state.config.audioFadeOut = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 0;
+      state.version += 1;
+      const out = document.querySelector("#audioFadeOutOut");
+      if (out) out.textContent = state.config.audioFadeOut > 0 ? `${state.config.audioFadeOut} s` : "Off";
     });
     $("#endSilence").addEventListener("input", (event) => {
       const raw = Number(event.target.value);
@@ -9212,6 +9413,13 @@ If you want to offset all timestamps of a track such that the first one is zero,
       const out = document.querySelector("#endSilenceOut");
       if (out) out.textContent = state.config.endSilence > 0 ? `${state.config.endSilence} s` : "Off";
       syncSizeEstimate();
+    });
+    $("#fadeOut").addEventListener("input", (event) => {
+      const raw = Number(event.target.value);
+      state.config.fadeOut = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 0;
+      state.version += 1;
+      const out = document.querySelector("#fadeOutOut");
+      if (out) out.textContent = state.config.fadeOut > 0 ? `${state.config.fadeOut} s` : "Off";
     });
     $("#btnRangePlayhead").addEventListener("click", () => {
       if (!state.song) return;
@@ -9390,6 +9598,21 @@ If you want to offset all timestamps of a track such that the first one is zero,
       state.version += 1;
       const out = document.querySelector("#lyricLinesOut");
       if (out) out.textContent = String(state.config.lyrics.lines);
+    });
+    $("#lyricWidth").addEventListener("input", (event) => {
+      const value = Math.max(0.2, Math.min(1, Number(event.target.value) / 100));
+      state.config.lyrics.width = value;
+      state.version += 1;
+      const out = document.querySelector("#lyricWidthOut");
+      if (out) out.textContent = `${Math.round(value * 100)}%`;
+    });
+    $("#lyricHold").addEventListener("input", (event) => {
+      const raw = Number(event.target.value);
+      const value = Number.isFinite(raw) ? Math.max(0, Math.min(12, raw)) : 0;
+      state.config.lyrics.hold = value;
+      state.version += 1;
+      const out = document.querySelector("#lyricHoldOut");
+      if (out) out.textContent = value > 0 ? `${value.toFixed(1)} s` : "Off";
     });
     $("#lyricWords").addEventListener("input", (event) => {
       const value = Math.max(3, Math.round(Number(event.target.value) || 8));
@@ -9728,8 +9951,8 @@ If you want to offset all timestamps of a track such that the first one is zero,
             config,
             assets: state.assets,
             lyrics: state.lyrics,
-            startAt: config.rangeStart,
-            endAt: config.rangeEnd,
+            startAt: rangeStartAt(config, state.song.duration),
+            endAt: rangeEndAt(config, state.song.duration),
             maxSeconds: options?.maxSeconds
           });
           state.lastExport = { blob: result.blob, mime: result.mime, bytes: result.blob.size, mode: result.mode, audioBitrate: result.audioBitrate, duration: result.duration };

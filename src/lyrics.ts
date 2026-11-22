@@ -294,11 +294,25 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
       : index + 1 < lines.length
         ? lines[index + 1].time
         : current.time + 6;
+  // A caption may not outstay its welcome: an instrumental break or the tail of
+  // the song would otherwise leave the last line hanging. `hold` counts from where
+  // the line itself ends, not from where it starts, so a phrase sung across six
+  // seconds is not cut at three — the seconds after the line are what fade away.
+  const nextCue = index + 1 < lines.length ? lines[index + 1].time : current.time + 6;
+  const ownEnd = current.end && current.end > current.time ? current.end : null;
+  const hold = Number(cfg.hold);
+  const extra = Number.isFinite(hold) && hold > 0 ? Math.min(12, hold) : 0;
+  const end = extra > 0 ? (ownEnd ?? nextCue) + extra : nextCue;
+  if (end <= t) return;
+  const fading = extra > 0 && ownEnd !== null && t > ownEnd;
+  const fadeAlpha = fading ? Math.max(0, Math.min(1, (end - t) / Math.min(0.45, extra))) : 1;
   const y = cfg.pos === 'bottom' ? height * 0.5 - height * 0.115 : cfg.pos === 'top' ? -height * 0.5 + height * 0.115 : 0;
   const pill = rgba(cfg.pill, cfg.pillOpacity);
   const family = fontFamily(cfg.font);
-  // Half the frame: a caption is a subtitle, not a headline across the picture.
-  const maxWidth = width * 0.5;
+  // Share of the frame a caption may use. Half by default keeps a subtitle feel;
+  // a wider setting fits more words per row before the text wraps.
+  const share = Math.max(0.2, Math.min(1, cfg.width ?? 0.5));
+  const maxWidth = width * share;
 
   // Words wrap onto new rows, and only a single word that still cannot fit
   // shrinks the type. Rows carry their character range so the karaoke sweep
@@ -366,7 +380,7 @@ export function drawLyrics(ctx: CanvasRenderingContext2D, opts: DrawOptions): vo
   // 1 is the historical offset; the slider can double it for a visible drop.
   const shadowShift = Math.max(0, Math.min(2, cfg.shadowOffset ?? 1));
   // Text opacity fades the letters, their drop shadow and the glow together.
-  const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1));
+  const textAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 1)) * fadeAlpha;
   // The black drop shadow is painted over the glow, so ease it back as the glow
   // comes up, otherwise the halo is smothered before it can be seen.
   ctx.shadowColor =

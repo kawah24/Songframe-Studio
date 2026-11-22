@@ -715,6 +715,9 @@ const lyricOpacity = await page.evaluate(() => {
         pillOpacity: 0,
         glow: 0,
         size: 64,
+        // pin the hold off: this test is about opacity, and the cue it draws at
+        // t=4 would otherwise be cleared by the 3 s default
+        hold: 0,
         opacity,
       },
     });
@@ -1033,6 +1036,41 @@ check(
   JSON.stringify({ shadow: lyricControls.shadow, offset: lyricControls.offset }),
 );
 
+// a centre image change has to repaint the preview on its own
+const centreRepaint = await page.evaluate(async () => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const hash = () => {
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let value = 2166136261;
+    for (let i = 0; i < data.length; i += 16) {
+      value ^= data[i] + data[i + 1] * 3 + data[i + 2] * 7;
+      value = Math.imul(value, 16777619);
+    }
+    return value >>> 0;
+  };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // NCS Circle is one of the presets that draws the centre art.
+  window.songframe.setConfig({ preset: 'NCS Circle' });
+  await wait(200);
+  document.querySelector('#btnCoverDefault').click();
+  await wait(600);
+  window.songframe.drawAt(1);
+  await wait(120);
+  const before = hash();
+  const coverBefore = window.songframe.getBackground().cover;
+  document.querySelector('#btnCoverReset').click();
+  await wait(400);
+  const after = hash();
+  const coverAfter = window.songframe.getBackground().cover;
+  return { before, after, changed: before !== after, coverBefore, coverAfter };
+});
+check(
+  centreRepaint.changed && centreRepaint.coverBefore !== centreRepaint.coverAfter,
+  'a centre image change repaints the frame',
+  JSON.stringify(centreRepaint),
+);
+
 // eject the song, then reset the whole session
 check(!(await page.isDisabled('#btnNewSong')), 'eject is available once a song is loaded');
 await page.click('#btnNewSong');
@@ -1064,6 +1102,253 @@ await page.waitForSelector('.modal.confirm');
 await page.click('.confirm-card [data-value="0"]');
 await page.waitForTimeout(200);
 check((await state()).preset === 'NCS Circle', 'cancelling a reset changes nothing');
+
+// a song first: the range estimate needs one, and an empty app draws its
+// drop-card scrim, which would skew a brightness measurement
+await page.evaluate(async () => {
+  const rate = 8000;
+  const frames = rate * 8;
+  const bytes = new Uint8Array(44 + frames * 2);
+  const view = new DataView(bytes.buffer);
+  const text = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + frames * 2, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, 'data');
+  view.setUint32(40, frames * 2, true);
+  for (let i = 0; i < frames; i++) view.setInt16(44 + i * 2, Math.sin((i / rate) * 2 * Math.PI * 220) * 6000, true);
+  await window.songframe.loadAudioFile(new File([bytes], 'range-test.wav', { type: 'audio/wav' }));
+});
+
+// dimming has to darken the background it sits over
+const dimShots = await page.evaluate(() => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const mean = () => {
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += (d[i] + d[i + 1] + d[i + 2]) / 3;
+    return sum / (d.length / 4);
+  };
+  const shot = (dim) => {
+    window.songframe.setConfig({
+      preset: 'Minimal',
+      bg: 'none',
+      primary: '#ffffff',
+      secondary: '#ffffff',
+      particles: 0,
+      effects: {},
+      dim,
+      lyrics: { ...window.songframe.getState().lyrics, enabled: false },
+    });
+    window.songframe.drawAt(1.2);
+    return mean();
+  };
+  return { off: Math.round(shot(0)), full: Math.round(shot(1)) };
+});
+check(dimShots.full <= Math.max(1, dimShots.off * 0.25), 'dimming darkens the backdrop', JSON.stringify(dimShots));
+
+// render range: "Length" counts from the start instead of an absolute end
+const rangeUi = await page.evaluate(() => {
+  document.querySelector('.tab[data-tab="style"]')?.click();
+  [...document.querySelectorAll('#rangeModeSeg button')].find((b) => b.dataset.value === 'length')?.click();
+  const start = document.querySelector('#rangeStart');
+  const second = document.querySelector('#rangeEnd');
+  start.value = '0:01';
+  start.dispatchEvent(new Event('input', { bubbles: true }));
+  second.value = '0:02';
+  second.dispatchEvent(new Event('input', { bubbles: true }));
+  const cfg = window.songframe.getState();
+  return {
+    mode: cfg.rangeMode,
+    start: cfg.rangeStart,
+    length: cfg.rangeLength,
+    label: document.querySelector('#rangeSecondLabel')?.textContent,
+    estimate: document.querySelector('#qualitySize')?.textContent || '',
+  };
+});
+check(
+  rangeUi.mode === 'length' && Math.abs(rangeUi.start - 1) < 0.01 && Math.abs(rangeUi.length - 2) < 0.01,
+  'range length mode parses m:ss',
+  JSON.stringify(rangeUi),
+);
+check(/\(2 s\)/.test(rangeUi.estimate), 'length mode renders two seconds', rangeUi.estimate);
+
+// and "End at" still takes an absolute time
+const endUi = await page.evaluate(() => {
+  [...document.querySelectorAll('#rangeModeSeg button')].find((b) => b.dataset.value === 'end')?.click();
+  const second = document.querySelector('#rangeEnd');
+  second.value = '3';
+  second.dispatchEvent(new Event('input', { bubbles: true }));
+  const cfg = window.songframe.getState();
+  return {
+    mode: cfg.rangeMode,
+    end: cfg.rangeEnd,
+    label: document.querySelector('#rangeSecondLabel')?.textContent,
+    estimate: document.querySelector('#qualitySize')?.textContent || '',
+  };
+});
+check(
+  endUi.mode === 'end' && Math.abs(endUi.end - 3) < 0.01 && /\(2 s\)/.test(endUi.estimate),
+  'end mode still takes an absolute time',
+  JSON.stringify(endUi),
+);
+
+// the picture fade and the audio fade are separate dials
+const fades = await page.evaluate(() => {
+  const set = (selector, value) => {
+    const el = document.querySelector(selector);
+    el.value = String(value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  set('#fadeOut', 3);
+  set('#audioFadeOut', 1.5);
+  const cfg = window.songframe.getState();
+  return {
+    picture: cfg.fadeOut,
+    audio: cfg.audioFadeOut,
+    pictureOut: document.querySelector('#fadeOutOut')?.textContent,
+    audioOut: document.querySelector('#audioFadeOutOut')?.textContent,
+  };
+});
+check(
+  fades.picture === 3 && fades.audio === 1.5 && fades.audioOut === '1.5 s',
+  'picture and audio fades are independent',
+  JSON.stringify(fades),
+);
+
+// the fade belongs to the end of the range: mid-range stays clear, and a playhead
+// past the range must not be blacked out (1.12.0 did exactly that)
+const fadeRange = await page.evaluate(() => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const lit = () => {
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if ((d[i] + d[i + 1] + d[i + 2]) / 3 > 40) n += 1;
+    return n;
+  };
+  window.songframe.setConfig({
+    preset: 'Minimal',
+    bg: 'none',
+    particles: 0,
+    rangeMode: 'length',
+    rangeStart: 2,
+    rangeLength: 3,
+    fadeOut: 1,
+    lyrics: { ...window.songframe.getState().lyrics, enabled: false },
+  });
+  const at = (seconds) => {
+    window.songframe.drawAt(seconds);
+    return lit();
+  };
+  return { mid: at(2.5), end: at(4.9), after: at(7) };
+});
+check(fadeRange.mid > 50, 'the fade leaves the middle of the range alone', JSON.stringify(fadeRange));
+check(fadeRange.end < 20, 'the fade reaches black at the range end', JSON.stringify(fadeRange));
+check(fadeRange.after > 50, 'a playhead past the range is not blacked out', JSON.stringify(fadeRange));
+
+// caption width: a wider share of the frame has to let a line run wider
+const captionWidth = await page.evaluate(() => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const box = () => {
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let min = canvas.width;
+    let max = -1;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const i = (y * canvas.width + x) * 4;
+        if ((d[i] + d[i + 1] + d[i + 2]) / 3 > 90) {
+          if (x < min) min = x;
+          if (x > max) max = x;
+        }
+      }
+    }
+    return max >= 0 ? max - min : 0;
+  };
+  const base = () => ({
+    preset: 'Minimal',
+    bg: 'none',
+    particles: 0,
+    lyrics: {
+      ...window.songframe.getState().lyrics,
+      enabled: true,
+      style: 'lines',
+      pos: 'bottom',
+      size: 60,
+      lines: 4,
+      maxWords: 40,
+      pillOpacity: 0,
+      color: '#ffffff',
+      highlight: '#ffffff',
+      opacity: 1,
+    },
+  });
+  window.songframe.setConfig(base());
+  window.songframe.loadLyrics('[Verse]\nAnd we pull in at eight-o-four and the clock on the dash says seven fifty-two');
+  const shot = (percent) => {
+    window.songframe.setConfig({ ...base(), lyrics: { ...base().lyrics, width: percent / 100 } });
+    window.songframe.drawAt(1.5);
+    return box();
+  };
+  return { half: shot(50), wide: shot(90) };
+});
+check(captionWidth.wide > captionWidth.half * 1.15, 'caption width widens the lyric block', JSON.stringify(captionWidth));
+
+// a long instrumental gap must not leave the last line hanging forever
+const lyricHold = await page.evaluate(() => {
+  const canvas = document.querySelector('#preview');
+  const ctx = canvas.getContext('2d');
+  const lit = () => {
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if ((d[i] + d[i + 1] + d[i + 2]) / 3 > 90) n += 1;
+    return n;
+  };
+  const base = () => ({
+    preset: 'Minimal',
+    bg: 'none',
+    particles: 0,
+    lyrics: {
+      ...window.songframe.getState().lyrics,
+      enabled: true,
+      style: 'lines',
+      pos: 'bottom',
+      size: 60,
+      lines: 2,
+      maxWords: 40,
+      pillOpacity: 0,
+      color: '#ffffff',
+      highlight: '#ffffff',
+      opacity: 1,
+      width: 0.7,
+    },
+  });
+  window.songframe.setConfig(base());
+  window.songframe.loadLyrics(
+    '1\n00:00:00,000 --> 00:00:02,000\nfirst line here\n\n2\n00:00:30,000 --> 00:00:32,000\nsecond line here',
+  );
+  const shot = (hold, seconds) => {
+    window.songframe.setConfig({ ...base(), lyrics: { ...base().lyrics, hold } });
+    window.songframe.drawAt(seconds);
+    return lit();
+  };
+  // the line ends at 2 s: hold 3 keeps it to 5 s, and 6 s is past that
+  return { early: shot(3, 1), tail: shot(3, 4), gone: shot(3, 6), legacy: shot(0, 6) };
+});
+check(lyricHold.early > 50, 'a caption shows while it is fresh', JSON.stringify(lyricHold));
+check(lyricHold.tail > 50, 'a long cue is not cut short by the hold', JSON.stringify(lyricHold));
+check(lyricHold.gone < lyricHold.early * 0.6, 'the hold clears the line after the gap', JSON.stringify(lyricHold));
+check(lyricHold.legacy > 50, 'hold 0 keeps the old until-the-next-line rule', JSON.stringify(lyricHold));
 
 check(errors.length === 0, 'no console errors', errors.slice(0, 2).join(' | '));
 

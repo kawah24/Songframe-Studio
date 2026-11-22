@@ -2,7 +2,7 @@ import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import { frameAt, TARGET_RATE, type Song } from './audio';
 import { ASPECTS } from './presets';
 import type { Config, LyricLine } from './types';
-import { renderFrame, type Assets } from './visualizer';
+import { renderFrame, paintFadeOverlay, type Assets } from './visualizer';
 
 export interface ExportRequest {
   song: Song;
@@ -42,13 +42,34 @@ function bitrateFor(width: number, height: number, fps: number, quality: number)
   return Math.round(width * height * fps * 0.12 * Math.max(0.4, quality));
 }
 
+/** Where the requested range starts, clamped inside the song. */
+export function rangeStartAt(config: Config, songDuration: number): number {
+  if (!songDuration) return 0;
+  return Math.max(0, Math.min(songDuration - 0.1, config.rangeStart || 0));
+}
+
+/**
+ * Where it ends. 'end' reads an absolute time from rangeEnd; 'length' adds
+ * rangeLength to the start. Zero in either field means "to the end of the song".
+ */
+export function rangeEndAt(config: Config, songDuration: number): number {
+  if (!songDuration) return 0;
+  const start = rangeStartAt(config, songDuration);
+  const wanted =
+    config.rangeMode === 'length'
+      ? config.rangeLength > 0
+        ? start + config.rangeLength
+        : songDuration
+      : config.rangeEnd && config.rangeEnd > start
+        ? config.rangeEnd
+        : songDuration;
+  return Math.max(start + 0.2, Math.min(songDuration, wanted));
+}
+
 /** Seconds the exporter will actually render: the same range rule as exportVideo. */
 export function renderSeconds(config: Config, songDuration: number): number {
   if (!songDuration) return 0;
-  const start = Math.max(0, Math.min(songDuration - 0.1, config.rangeStart || 0));
-  const wantedEnd = config.rangeEnd && config.rangeEnd > start ? config.rangeEnd : songDuration;
-  const end = Math.max(start + 0.2, Math.min(songDuration, wantedEnd));
-  return Math.max(0.2, end - start);
+  return Math.max(0.2, rangeEndAt(config, songDuration) - rangeStartAt(config, songDuration));
 }
 
 /**
@@ -65,6 +86,36 @@ export function tailSeconds(config: Config): number {
 export function exportSeconds(config: Config, songDuration: number): number {
   const body = renderSeconds(config, songDuration);
   return body > 0 ? body + tailSeconds(config) : 0;
+}
+
+/** Seconds of fade at the end of the file: picture to black, sound to silence. */
+export function fadeSeconds(config: Config): number {
+  const value = Number(config.fadeOut);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(15, Math.round(value * 10) / 10);
+}
+
+/** Seconds the audio ramps down at the end; independent of the picture fade. */
+export function audioFadeSeconds(config: Config): number {
+  const value = Number(config.audioFadeOut);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(15, Math.round(value * 10) / 10);
+}
+
+/** Linear taper 1 -> 0 across the last `fade` seconds of `duration`. */
+export function fadeGainAt(fade: number, elapsed: number, duration: number): number {
+  if (fade <= 0 || duration <= 0) return 1;
+  const remaining = duration - elapsed;
+  if (remaining >= fade) return 1;
+  return Math.max(0, Math.min(1, remaining / fade));
+}
+
+/**
+ * How much black to lay over a frame, 0..1. The fade runs back from the last
+ * frame of the file, so an end-silence tail is faded too. 0 = untouched.
+ */
+export function fadeAlphaAt(config: Config, elapsed: number, duration: number): number {
+  return 1 - fadeGainAt(fadeSeconds(config), elapsed, duration);
 }
 
 /** Rough file size in MB from the bitrates the encoder is configured with. */
@@ -235,7 +286,7 @@ export async function exportVideo(request: ExportRequest): Promise<ExportResult>
     if (config.bg === 'video' && assets.backgroundVideo && !assets.backgroundVideo.paused) {
       assets.backgroundVideo.pause();
     }
-    await encodeAudio(song, muxer, onProgress, support.audioBitrate, signal, start, start + duration);
+    await encodeAudio(song, muxer, onProgress, support.audioBitrate, signal, start, start + duration, audioFadeSeconds(config));
 
     const step = 1 / fps;
     const frameDuration = Math.round(1_000_000 / fps);
@@ -246,6 +297,9 @@ export async function exportVideo(request: ExportRequest): Promise<ExportResult>
       const frame = frameAt(song, time, config.sensitivity);
       if (config.bg === 'video' && assets.backgroundVideo) await seekVideo(assets.backgroundVideo, time);
       renderFrame(ctx, width, height, { config, frame, assets, lyrics, duration: song.duration, peaks: song.peaks });
+
+      // Fade the picture out over the last seconds of the file.
+      paintFadeOverlay(ctx, width, height, fadeAlphaAt(config, time - start, duration));
 
       const videoFrame = new VideoFrame(canvas, { timestamp: Math.round(i * 1_000_000 / fps), duration: frameDuration });
       videoEncoder.encode(videoFrame, { keyFrame: i % (fps * 2) === 0 });
@@ -280,6 +334,7 @@ async function encodeAudio(
   signal?: AbortSignal,
   from = 0,
   to = song.duration,
+  fade = 0,
 ): Promise<void> {
   const left = song.buffer.getChannelData(0);
   const right = song.buffer.numberOfChannels > 1 ? song.buffer.getChannelData(1) : left;
@@ -318,6 +373,17 @@ async function encodeAudio(
     const planar = new Float32Array(count * 2);
     planar.set(left.subarray(at, at + count), 0);
     planar.set(right.subarray(at, at + count), count);
+    // Same curve as the picture: the last `fade` seconds ramp to silence.
+    if (fade > 0) {
+      const fadeFrom = to - fade;
+      for (let j = 0; j < count; j++) {
+        const seconds = (at + j) / TARGET_RATE;
+        if (seconds <= fadeFrom) continue;
+        const gain = Math.max(0, Math.min(1, (to - seconds) / fade));
+        planar[j] *= gain;
+        planar[count + j] *= gain;
+      }
+    }
     const data = new AudioData({
       format: 'f32-planar',
       sampleRate: TARGET_RATE,
@@ -360,7 +426,10 @@ async function exportRealtime(request: RealtimeRequest): Promise<ExportResult> {
   const destination = audioCtx.createMediaStreamDestination();
   const source = audioCtx.createBufferSource();
   source.buffer = song.buffer;
-  source.connect(destination);
+  const fadeGain = audioCtx.createGain();
+  fadeGain.gain.value = 1;
+  source.connect(fadeGain);
+  fadeGain.connect(destination);
 
   const stream = canvas.captureStream(config.fps);
   destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
@@ -389,6 +458,12 @@ async function exportRealtime(request: RealtimeRequest): Promise<ExportResult> {
 
   onProgress?.('Recording in real time', 0.01);
   await audioCtx.resume();
+  const fade = audioFadeSeconds(config);
+  if (fade > 0 && duration > fade) {
+    const rampAt = audioCtx.currentTime;
+    fadeGain.gain.setValueAtTime(1, rampAt + Math.max(0, duration - fade));
+    fadeGain.gain.linearRampToValueAtTime(0, rampAt + duration);
+  }
   recorder.start(1000);
   source.start(0, Math.max(0, request.startAt ?? 0));
 
@@ -406,6 +481,7 @@ async function exportRealtime(request: RealtimeRequest): Promise<ExportResult> {
         const t = Math.min(duration, elapsed);
         const frame = frameAt(song, (request.startAt ?? 0) + t, config.sensitivity);
         renderFrame(ctx, width, height, { config, frame, assets, lyrics, duration: song.duration, peaks: song.peaks });
+        paintFadeOverlay(ctx, width, height, fadeAlphaAt(config, t, duration));
         onProgress?.('Recording in real time', Math.min(0.97, t / duration), `${t.toFixed(1)}s / ${duration.toFixed(1)}s`);
         if (elapsed >= duration) {
           resolve();
